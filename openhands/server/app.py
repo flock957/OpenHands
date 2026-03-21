@@ -61,6 +61,14 @@ def combine_lifespans(*lifespans):
 
 @asynccontextmanager
 async def _lifespan(app: FastAPI) -> AsyncIterator[None]:
+    # >>> CUSTOM: HiClaw — seed skills from custom/skill_examples/ on startup <<<
+    try:
+        from custom.skill_mgmt.seed import seed_skills
+        seed_skills()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).warning(f'Skill seed skipped: {e}')
+    # >>> END CUSTOM <<<
     async with conversation_manager:
         yield
 

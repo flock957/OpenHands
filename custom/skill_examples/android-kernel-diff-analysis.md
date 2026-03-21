@@ -3,10 +3,29 @@ name: android-kernel-diff-analysis
 type: knowledge
 version: 1.0.0
 agent: CodeActAgent
+description: "Android Common Kernel 月度版本对比分析：下载内核代码，对比两个月度标签间所有提交，分析每个提交对 KO 模块的影响，生成详细分析报告"
+category: kernel-analysis
 triggers:
 - /kernel-diff
 - android kernel analysis
 - 内核对比分析
+tags:
+- android
+- kernel
+- ko
+- driver
+- analysis
+inputs:
+- name: old_tag
+  label: 旧版本标签
+  placeholder: "e.g., android-6.12-2025-08"
+  required: true
+- name: new_tag
+  label: 新版本标签
+  placeholder: "e.g., android-6.12-2025-12"
+  required: true
+scripts:
+- kernel_diff_analysis.py
 ---
 
 # Android 内核月度版本对比分析
