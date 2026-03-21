@@ -40,6 +40,7 @@ import ChatStatusIndicator from "./chat-status-indicator";
 import { getStatusColor, getStatusText } from "#/utils/utils";
 import { useNewConversationCommand } from "#/hooks/mutation/use-new-conversation-command";
 import { I18nKey } from "#/i18n/declaration";
+import { PerfAnalysisPanel } from "./perf-analysis-panel";
 
 function getEntryPoint(
   hasRepository: boolean | null,
@@ -293,9 +294,15 @@ export function ChatInterface() {
           !optimisticUserMessage &&
           !userEventsExist &&
           !isChatLoading && (
-            <ChatSuggestions
-              onSuggestionsClick={(message) => setMessageToSend(message)}
-            />
+            <>
+              <ChatSuggestions
+                onSuggestionsClick={(message) => setMessageToSend(message)}
+              />
+              <PerfAnalysisPanel
+                onSubmit={handleSendMessage}
+                disabled={isAgentRunning}
+              />
+            </>
           )}
         {/* Note: We only hide chat suggestions when there's a user message */}
 

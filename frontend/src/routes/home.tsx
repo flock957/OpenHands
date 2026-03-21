@@ -10,6 +10,7 @@ import { HomepageCTA } from "#/components/features/home/homepage-cta";
 import { isCTADismissed } from "#/utils/local-storage";
 import { useConfig } from "#/hooks/query/use-config";
 import { ENABLE_PROJ_USER_JOURNEY } from "#/utils/feature-flags";
+import { PerfAgentCard } from "#/components/features/home/perf-agent-card";
 
 <PrefetchPageLinks page="/conversations/:conversationId" />;
 
@@ -39,6 +40,15 @@ function HomeScreen() {
         >
           <RepoConnector onRepoSelection={(repo) => setSelectedRepo(repo)} />
           <NewConversation />
+        </div>
+      </div>
+
+      <div className="pt-4 flex justify-center">
+        <div
+          className="flex flex-col gap-5 px-6 sm:max-w-full sm:min-w-full md:flex-row lg:px-0 lg:max-w-[703px] lg:min-w-[703px]"
+          data-testid="home-screen-agent-section"
+        >
+          <PerfAgentCard />
         </div>
       </div>
 
