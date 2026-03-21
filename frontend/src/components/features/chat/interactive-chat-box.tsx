@@ -1,3 +1,4 @@
+import React from "react";
 import { isFileImage } from "#/utils/is-file-image";
 import { displayErrorToast } from "#/utils/custom-toast-handlers";
 import { validateFiles } from "#/utils/file-validation";
@@ -10,10 +11,23 @@ import { useAgentState } from "#/hooks/use-agent-state";
 import { processFiles, processImages } from "#/utils/file-processing";
 import { useSubConversationTaskPolling } from "#/hooks/query/use-sub-conversation-task-polling";
 import { isTaskPolling } from "#/utils/utils";
+// >>> CUSTOM: HiClaw <<<
+import { SkillActiveBadge } from "#/components/features/custom/skill-management/skill-active-badge";
+import { SkillInputForm } from "#/components/features/custom/skill-management/skill-input-form";
+import { parseSkillInputs, formatSkillMessage, type SkillInputField } from "#/utils/parse-skill-inputs";
+// >>> END CUSTOM <<<
 
 interface InteractiveChatBoxProps {
   onSubmit: (message: string, images: File[], files: File[]) => void;
 }
+
+// >>> CUSTOM: HiClaw <<<
+interface PendingSlashSkill {
+  name: string;
+  trigger: string | undefined;
+  inputs: SkillInputField[];
+}
+// >>> END CUSTOM <<<
 
 export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
   const {
@@ -28,6 +42,44 @@ export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
     removeImageLoading,
     subConversationTaskId,
   } = useConversationStore();
+
+  // >>> CUSTOM: HiClaw <<<
+  const [activeSkillName, setActiveSkillName] = React.useState<string | null>(null);
+  const [pendingSlashSkill, setPendingSlashSkill] = React.useState<PendingSlashSkill | null>(null);
+
+  const handleActivateSkill = React.useCallback((skillName: string, content: string) => {
+    // Check if this skill has inputs by parsing the content
+    // For the SkillSelector path, inputs are handled inside SkillSelector itself.
+    // This callback is for direct activation (no inputs) or from SkillSelector after form submit.
+    setActiveSkillName(skillName);
+    onSubmit(content, [], []);
+  }, [onSubmit]);
+
+  const handleDismissSkill = React.useCallback(() => { setActiveSkillName(null); }, []);
+
+  // Called from slash command when a skill with inputs is selected
+  const handleSlashSkillWithInputs = React.useCallback((skill: PendingSlashSkill) => {
+    setPendingSlashSkill(skill);
+  }, []);
+
+  const handleSlashFormSubmit = React.useCallback((values: Record<string, string>) => {
+    if (!pendingSlashSkill) return;
+    const message = formatSkillMessage(
+      pendingSlashSkill.name,
+      pendingSlashSkill.trigger,
+      pendingSlashSkill.inputs,
+      values,
+    );
+    setActiveSkillName(pendingSlashSkill.name);
+    setPendingSlashSkill(null);
+    onSubmit(message, [], []);
+  }, [pendingSlashSkill, onSubmit]);
+
+  const handleSlashFormCancel = React.useCallback(() => {
+    setPendingSlashSkill(null);
+  }, []);
+  // >>> END CUSTOM <<<
+
   const { curAgentState } = useAgentState();
   const { data: conversation } = useActiveConversation();
 
@@ -150,11 +202,32 @@ export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
 
   return (
     <div data-testid="interactive-chat-box">
+      {/* >>> CUSTOM: HiClaw <<< */}
+      {pendingSlashSkill && (
+        <div className="mb-2">
+          <SkillInputForm
+            skillName={pendingSlashSkill.name}
+            inputs={pendingSlashSkill.inputs}
+            onSubmit={handleSlashFormSubmit}
+            onCancel={handleSlashFormCancel}
+          />
+        </div>
+      )}
+      {activeSkillName && !pendingSlashSkill && (
+        <div className="mb-2">
+          <SkillActiveBadge skillName={activeSkillName} onDismiss={handleDismissSkill} />
+        </div>
+      )}
+      {/* >>> END CUSTOM <<< */}
       <CustomChatInput
         disabled={isDisabled}
         onSubmit={handleSubmit}
         onFilesPaste={handleUpload}
         conversationStatus={conversation?.status || null}
+        // >>> CUSTOM: HiClaw <<<
+        onActivateSkill={handleActivateSkill}
+        onSlashSkillWithInputs={handleSlashSkillWithInputs}
+        // >>> END CUSTOM <<<
       />
       <div className="mt-4">
         <GitControlBar onSuggestionsClick={handleSuggestionsClick} />

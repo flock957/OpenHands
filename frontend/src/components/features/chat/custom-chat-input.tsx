@@ -5,7 +5,7 @@ import { useFileHandling } from "#/hooks/chat/use-file-handling";
 import { useGripResize } from "#/hooks/chat/use-grip-resize";
 import { useChatInputEvents } from "#/hooks/chat/use-chat-input-events";
 import { useChatSubmission } from "#/hooks/chat/use-chat-submission";
-import { useSlashCommand } from "#/hooks/chat/use-slash-command";
+import { useSlashCommand, type SkillWithInputsInfo } from "#/hooks/chat/use-slash-command";
 import { ChatInputGrip } from "./components/chat-input-grip";
 import { ChatInputContainer } from "./components/chat-input-container";
 import { HiddenFileInput } from "./components/hidden-file-input";
@@ -21,6 +21,10 @@ export interface CustomChatInputProps {
   onFilesPaste?: (files: File[]) => void;
   className?: React.HTMLAttributes<HTMLDivElement>["className"];
   buttonClassName?: React.HTMLAttributes<HTMLButtonElement>["className"];
+  // >>> CUSTOM: HiClaw <<<
+  onActivateSkill?: (skillName: string, content: string) => void;
+  onSlashSkillWithInputs?: (info: SkillWithInputsInfo) => void;
+  // >>> END CUSTOM <<<
 }
 
 export function CustomChatInput({
@@ -33,6 +37,8 @@ export function CustomChatInput({
   onFilesPaste,
   className = "",
   buttonClassName = "",
+  onActivateSkill,
+  onSlashSkillWithInputs,
 }: CustomChatInputProps) {
   const {
     submittedMessage,
@@ -115,7 +121,12 @@ export function CustomChatInput({
     selectItem: selectSlashItem,
     handleSlashKeyDown,
     closeMenu: closeSlashMenu,
-  } = useSlashCommand(chatInputRef as React.RefObject<HTMLDivElement | null>);
+  } = useSlashCommand(
+    chatInputRef as React.RefObject<HTMLDivElement | null>,
+    // >>> CUSTOM: HiClaw <<<
+    onSlashSkillWithInputs,
+    // >>> END CUSTOM <<<
+  );
 
   // Cleanup: reset suggestions visibility when component unmounts
   useEffect(
@@ -175,6 +186,9 @@ export function CustomChatInput({
           slashItems={slashItems}
           slashSelectedIndex={slashSelectedIndex}
           onSlashSelect={selectSlashItem}
+          // >>> CUSTOM: HiClaw <<<
+          onActivateSkill={onActivateSkill}
+          // >>> END CUSTOM <<<
         />
       </div>
     </div>
