@@ -6,6 +6,9 @@ import { UserActions } from "./user-actions";
 import { OpenHandsLogoButton } from "#/components/shared/buttons/openhands-logo-button";
 import { NewProjectButton } from "#/components/shared/buttons/new-project-button";
 import { ConversationPanelButton } from "#/components/shared/buttons/conversation-panel-button";
+// >>> CUSTOM: HiClaw <<<
+import { SkillManagementButton } from "#/components/shared/buttons/skill-management-button";
+// >>> END CUSTOM <<<
 import { SettingsModal } from "#/components/shared/modals/settings/settings-modal";
 import { useSettings } from "#/hooks/query/use-settings";
 import { ConversationPanel } from "../conversation-panel/conversation-panel";
@@ -87,6 +90,9 @@ export function Sidebar() {
               }
               disabled={settings?.email_verified === false}
             />
+            {/* >>> CUSTOM: HiClaw <<< */}
+            <SkillManagementButton />
+            {/* >>> END CUSTOM <<< */}
           </div>
 
           <div className="flex flex-row md:flex-col md:items-center gap-[26px]">

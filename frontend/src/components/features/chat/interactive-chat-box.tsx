@@ -1,3 +1,4 @@
+import React from "react";
 import { isFileImage } from "#/utils/is-file-image";
 import { displayErrorToast } from "#/utils/custom-toast-handlers";
 import { validateFiles } from "#/utils/file-validation";
@@ -10,6 +11,9 @@ import { useAgentState } from "#/hooks/use-agent-state";
 import { processFiles, processImages } from "#/utils/file-processing";
 import { useSubConversationTaskPolling } from "#/hooks/query/use-sub-conversation-task-polling";
 import { isTaskPolling } from "#/utils/utils";
+// >>> CUSTOM: HiClaw <<<
+import { SkillActiveBadge } from "#/components/features/custom/skill-management/skill-active-badge";
+// >>> END CUSTOM <<<
 
 interface InteractiveChatBoxProps {
   onSubmit: (message: string, images: File[], files: File[]) => void;
@@ -28,6 +32,19 @@ export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
     removeImageLoading,
     subConversationTaskId,
   } = useConversationStore();
+
+  // >>> CUSTOM: HiClaw — Skill activation state <<<
+  const [activeSkillName, setActiveSkillName] = React.useState<string | null>(null);
+
+  const handleActivateSkill = React.useCallback((skillName: string, content: string) => {
+    setActiveSkillName(skillName);
+    onSubmit(content, [], []);
+  }, [onSubmit]);
+
+  const handleDismissSkill = React.useCallback(() => {
+    setActiveSkillName(null);
+  }, []);
+  // >>> END CUSTOM <<<
   const { curAgentState } = useAgentState();
   const { data: conversation } = useActiveConversation();
 
@@ -150,11 +167,21 @@ export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
 
   return (
     <div data-testid="interactive-chat-box">
+      {/* >>> CUSTOM: HiClaw — Skill active badge <<< */}
+      {activeSkillName && (
+        <div className="mb-2">
+          <SkillActiveBadge skillName={activeSkillName} onDismiss={handleDismissSkill} />
+        </div>
+      )}
+      {/* >>> END CUSTOM <<< */}
       <CustomChatInput
         disabled={isDisabled}
         onSubmit={handleSubmit}
         onFilesPaste={handleUpload}
         conversationStatus={conversation?.status || null}
+        // >>> CUSTOM: HiClaw <<<
+        onActivateSkill={handleActivateSkill}
+        // >>> END CUSTOM <<<
       />
       <div className="mt-4">
         <GitControlBar onSuggestionsClick={handleSuggestionsClick} />

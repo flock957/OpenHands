@@ -3,6 +3,9 @@ import { cn } from "#/utils/utils";
 import { ChatAddFileButton } from "../chat-add-file-button";
 import { ChatSendButton } from "../chat-send-button";
 import { ChatInputField } from "./chat-input-field";
+// >>> CUSTOM: HiClaw <<<
+import { SkillSelector } from "#/components/features/custom/skill-management/skill-selector";
+// >>> END CUSTOM <<<
 
 interface ChatInputRowProps {
   chatInputRef: React.RefObject<HTMLDivElement | null>;
@@ -16,6 +19,9 @@ interface ChatInputRowProps {
   onKeyDown: (e: React.KeyboardEvent) => void;
   onFocus?: () => void;
   onBlur?: () => void;
+  // >>> CUSTOM: HiClaw <<<
+  onActivateSkill?: (skillName: string, content: string) => void;
+  // >>> END CUSTOM <<<
 }
 
 export function ChatInputRow({
@@ -30,6 +36,7 @@ export function ChatInputRow({
   onKeyDown,
   onFocus,
   onBlur,
+  onActivateSkill,
 }: ChatInputRowProps) {
   return (
     <div className="box-border content-stretch flex flex-row items-end justify-between p-0 relative shrink-0 w-full pb-[18px] gap-2">
@@ -38,6 +45,12 @@ export function ChatInputRow({
           disabled={disabled}
           handleFileIconClick={() => handleFileIconClick(disabled)}
         />
+
+        {/* >>> CUSTOM: HiClaw <<< */}
+        {onActivateSkill && (
+          <SkillSelector disabled={disabled} onActivateSkill={onActivateSkill} />
+        )}
+        {/* >>> END CUSTOM <<< */}
 
         <ChatInputField
           chatInputRef={chatInputRef}

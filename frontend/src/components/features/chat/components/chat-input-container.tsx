@@ -30,6 +30,9 @@ interface ChatInputContainerProps {
   slashItems?: SlashCommandItem[];
   slashSelectedIndex?: number;
   onSlashSelect?: (item: SlashCommandItem) => void;
+  // >>> CUSTOM: HiClaw <<<
+  onActivateSkill?: (skillName: string, content: string) => void;
+  // >>> END CUSTOM <<<
 }
 
 export function ChatInputContainer({
@@ -54,6 +57,7 @@ export function ChatInputContainer({
   slashItems = [],
   slashSelectedIndex = 0,
   onSlashSelect,
+  onActivateSkill,
 }: ChatInputContainerProps) {
   const conversationMode = useConversationStore(
     (state) => state.conversationMode,
@@ -98,6 +102,7 @@ export function ChatInputContainer({
           onKeyDown={onKeyDown}
           onFocus={onFocus}
           onBlur={onBlur}
+          onActivateSkill={onActivateSkill}
         />
       </div>
 

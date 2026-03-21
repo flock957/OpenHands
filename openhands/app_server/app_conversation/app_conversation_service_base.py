@@ -148,6 +148,17 @@ class AppConversationServiceBase(AppConversationService, ABC):
                 f'{[s.name for s in all_skills]}'
             )
 
+            # >>> CUSTOM: HiClaw — inject database-managed skills <<<
+            try:
+                from custom.skill_mgmt.bridge import load_custom_skills
+                custom_skills = await load_custom_skills()
+                if custom_skills:
+                    all_skills = self._merge_skills([all_skills, custom_skills])
+                    _logger.info(f'Injected {len(custom_skills)} custom skills')
+            except ImportError:
+                pass
+            # >>> END CUSTOM <<<
+
             return all_skills
 
         except Exception as e:

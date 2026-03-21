@@ -25,6 +25,9 @@ export default [
     ]),
     route("conversations/:conversationId", "routes/conversation.tsx"),
     route("microagent-management", "routes/microagent-management.tsx"),
+    // >>> CUSTOM: HiClaw <<<
+    route("skill-management", "routes/skill-management.tsx"),
+    // >>> END CUSTOM <<<
     route("oauth/device/verify", "routes/device-verify.tsx"),
   ]),
   // Shared routes that don't require authentication
