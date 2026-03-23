@@ -254,15 +254,19 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         yield task
 
         try:
+            _logger.info('[STARTUP] Step 1: Waiting for sandbox to start...')
             async for updated_task in self._wait_for_sandbox_start(task):
                 yield updated_task
 
             # Get the sandbox
             sandbox_id = task.sandbox_id
             assert sandbox_id is not None
+            _logger.info(f'[STARTUP] Step 2: Sandbox started, id={sandbox_id}')
             sandbox = await self.sandbox_service.get_sandbox(sandbox_id)
             assert sandbox is not None
+            _logger.info(f'[STARTUP] Step 2: Sandbox status={sandbox.status}, urls={[u.url for u in (sandbox.exposed_urls or [])]}')
             agent_server_url = self._get_agent_server_url(sandbox)
+            _logger.info(f'[STARTUP] Step 2: agent_server_url={agent_server_url}')
 
             # Get the working dir
             sandbox_spec = await self.sandbox_spec_service.get_sandbox_spec(
@@ -278,8 +282,10 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             sandbox_grouping_strategy = await self._get_sandbox_grouping_strategy()
             if sandbox_grouping_strategy != SandboxGroupingStrategy.NO_GROUPING:
                 working_dir = f'{working_dir}/{conversation_id.hex}'
+            _logger.info(f'[STARTUP] Step 3: working_dir={working_dir}')
 
             # Run setup scripts
+            _logger.info('[STARTUP] Step 4: Running setup scripts...')
             remote_workspace = AsyncRemoteWorkspace(
                 host=agent_server_url,
                 api_key=sandbox.session_api_key,
@@ -290,6 +296,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             ):
                 yield updated_task
 
+            _logger.info('[STARTUP] Step 5: Building start conversation request...')
             # Build the start request
             start_conversation_request = (
                 await self._build_start_conversation_request_for_user(
@@ -312,6 +319,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             task.agent_server_url = agent_server_url
             yield task
 
+            _logger.info('[STARTUP] Step 6: Sending start conversation request to agent-server...')
             # Start conversation...
             body_json = start_conversation_request.model_dump(
                 mode='json', context={'expose_secrets': True}
@@ -329,8 +337,10 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
                 timeout=self.sandbox_startup_timeout,
             )
 
+            _logger.info(f'[STARTUP] Step 6: Response status={response.status_code}')
             response.raise_for_status()
             info = ConversationInfo.model_validate(response.json())
+            _logger.info(f'[STARTUP] Step 7: Conversation created, id={info.id}')
 
             # Store info...
             user_id = await self.user_context.get_user_id()
@@ -397,7 +407,7 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
                 )
 
         except Exception as exc:
-            _logger.exception('Error starting conversation', stack_info=True)
+            _logger.exception(f'[STARTUP] FAILED at step: {exc}', stack_info=True)
             task.status = AppConversationStartTaskStatus.ERROR
             task.detail = str(exc)
             yield task
@@ -671,9 +681,11 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
         # Get or create the sandbox
         if not task.request.sandbox_id:
             # First try to find a running sandbox for the current user
+            _logger.info('[STARTUP] Step 1a: Looking for existing sandbox...')
             sandbox = await self._find_running_sandbox_for_user()
             if sandbox is None:
                 # No running sandbox found, start a new one
+                _logger.info('[STARTUP] Step 1b: No existing sandbox, creating new one...')
 
                 # Convert conversation_id to hex string if present
                 sandbox_id_str = (
@@ -685,6 +697,9 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
                 sandbox = await self.sandbox_service.start_sandbox(
                     sandbox_id=sandbox_id_str
                 )
+                _logger.info(f'[STARTUP] Step 1b: Sandbox created, id={sandbox.id}, status={sandbox.status}')
+            else:
+                _logger.info(f'[STARTUP] Step 1a: Found existing sandbox, id={sandbox.id}, status={sandbox.status}')
             task.sandbox_id = sandbox.id
         else:
             sandbox_info = await self.sandbox_service.get_sandbox(
@@ -710,12 +725,16 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
 
         yield task
 
+        _logger.info(f'[STARTUP] Step 1c: Sandbox status={sandbox.status}, checking...')
+
         # Resume if paused
         if sandbox.status == SandboxStatus.PAUSED:
+            _logger.info('[STARTUP] Step 1c: Resuming paused sandbox...')
             await self.sandbox_service.resume_sandbox(sandbox.id)
 
         # Check for immediate error states
         if sandbox.status in (None, SandboxStatus.ERROR):
+            _logger.error(f'[STARTUP] FAILED: Sandbox in error state: {sandbox.status}')
             raise SandboxError(f'Sandbox status: {sandbox.status}')
 
         # For non-STARTING/RUNNING states (except PAUSED which we just resumed), fail fast
@@ -724,8 +743,10 @@ class LiveStatusAppConversationService(AppConversationServiceBase):
             SandboxStatus.RUNNING,
             SandboxStatus.PAUSED,
         ):
+            _logger.error(f'[STARTUP] FAILED: Sandbox not startable, status={sandbox.status}')
             raise SandboxError(f'Sandbox not startable: {sandbox.id}')
 
+        _logger.info('[STARTUP] Step 1d: Waiting for sandbox agent-server to be ready...')
         # Use shared wait_for_sandbox_running utility to poll for ready state
         await self.sandbox_service.wait_for_sandbox_running(
             sandbox.id,
