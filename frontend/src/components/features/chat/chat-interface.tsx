@@ -84,12 +84,16 @@ function SkillInputCardInChat() {
       sawRunningRef.current = false;
       return;
     }
-    console.log("[SkillInput] state:", curAgentState, "sawRunning:", sawRunningRef.current, "visible:", visible);
     if (curAgentState === AgentState.RUNNING) {
       sawRunningRef.current = true;
     }
-    if (sawRunningRef.current && !visible && curAgentState === AgentState.AWAITING_USER_INPUT) {
-      console.log("[SkillInput] SHOWING FORM — agent finished responding");
+    // Show form when agent stops running (any non-running state after we saw RUNNING)
+    const agentStopped =
+      curAgentState === AgentState.AWAITING_USER_INPUT ||
+      curAgentState === AgentState.FINISHED ||
+      curAgentState === AgentState.PAUSED ||
+      curAgentState === AgentState.STOPPED;
+    if (sawRunningRef.current && !visible && agentStopped) {
       showForm();
     }
   }, [pending, visible, curAgentState, showForm]);

@@ -48,22 +48,26 @@ export function SkillSelector({ disabled, onActivateSkill }: Props) {
     setIsOpen(false);
     const slashTrigger = skill.triggers.find((t) => t.startsWith("/"));
 
-    // Always activate the skill first
+    // Fetch detail FIRST to check for inputs (before activation,
+    // so we can set pending before agent state transitions happen)
+    let inputs: ReturnType<typeof parseSkillInputs> = [];
+    try {
+      const detail = await SkillService.getSkill(skill.id);
+      inputs = parseSkillInputs(detail.content);
+    } catch (e) {
+      // Continue without inputs
+    }
+
+    // Set pending BEFORE activation so we catch RUNNING → AWAITING_USER_INPUT
+    if (inputs.length > 0) {
+      setPending({ skillName: skill.name, trigger: slashTrigger, inputs });
+    }
+
+    // Now activate the skill
     const triggerMessage = slashTrigger
       ? `Execute skill: ${skill.name} (trigger: ${slashTrigger}). Follow the skill instructions to complete the task.`
       : `Execute skill: ${skill.name}. Follow the skill instructions to complete the task.`;
     onActivateSkill(skill.name, triggerMessage);
-
-    // Then check if skill needs user inputs — if so, show form in chat stream
-    try {
-      const detail = await SkillService.getSkill(skill.id);
-      const inputs = parseSkillInputs(detail.content);
-      if (inputs.length > 0) {
-        setPending({ skillName: skill.name, trigger: slashTrigger, inputs });
-      }
-    } catch (e) {
-      // Skill activated anyway, just no form
-    }
   };
 
   const filtered = search
