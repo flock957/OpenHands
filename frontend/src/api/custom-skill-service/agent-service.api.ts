@@ -13,11 +13,19 @@ export interface AgentInfo {
   updated_at: string;
 }
 
+export interface SkillBrief {
+  id: string;
+  name: string;
+  description: string | null;
+}
+
 export interface AgentDetail extends AgentInfo {
   system_prompt: string | null;
   default_llm_model: string | null;
   config_json: string | null;
+  usage_instructions: string | null;
   skill_ids: string[];
+  skills: SkillBrief[];
   is_favorited: boolean;
 }
 

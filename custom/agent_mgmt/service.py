@@ -11,8 +11,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from custom.agent_mgmt.models import (
     AgentCreate, AgentDetail, AgentFavorite, AgentInfo,
-    AgentSkillLink, AgentUpdate, StoredAgent,
+    AgentSkillLink, AgentUpdate, SkillBrief, StoredAgent,
 )
+from custom.skill_mgmt.models import StoredSkill
 
 
 class AgentService:
@@ -81,14 +82,17 @@ class AgentService:
         if not agent:
             return None
 
-        # Get linked skill IDs
+        # Get linked skills with details
         skill_stmt = (
-            select(AgentSkillLink.skill_id)
+            select(AgentSkillLink.skill_id, StoredSkill.name, StoredSkill.description)
+            .outerjoin(StoredSkill, AgentSkillLink.skill_id == StoredSkill.id)
             .where(AgentSkillLink.agent_id == agent_id)
             .order_by(AgentSkillLink.sort_order)
         )
         skill_result = await self.db.execute(skill_stmt)
-        skill_ids = [str(r) for r in skill_result.scalars().all()]
+        skill_rows = skill_result.all()
+        skill_ids = [str(r[0]) for r in skill_rows]
+        skills = [SkillBrief(id=str(r[0]), name=r[1] or "unknown", description=r[2]) for r in skill_rows]
 
         # Check favorite status
         is_favorited = False
@@ -110,12 +114,14 @@ class AgentService:
             tags=tags,
             default_llm_model=agent.default_llm_model,
             config_json=agent.config_json,
+            usage_instructions=agent.usage_instructions,
             is_enabled=agent.is_enabled,
             usage_count=agent.usage_count,
             created_by=agent.created_by,
             created_at=agent.created_at,
             updated_at=agent.updated_at,
             skill_ids=skill_ids,
+            skills=skills,
             is_favorited=is_favorited,
         )
 
@@ -130,6 +136,7 @@ class AgentService:
             tags=json.dumps(data.tags) if data.tags else None,
             default_llm_model=data.default_llm_model,
             config_json=data.config_json,
+            usage_instructions=data.usage_instructions,
             is_enabled=True,
             usage_count=0,
             created_by=created_by,

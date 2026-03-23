@@ -28,6 +28,7 @@ class StoredAgent(Base):  # type: ignore
     tags = Column(Text, nullable=True)  # JSON string: ["tag1", "tag2"]
     default_llm_model = Column(String, nullable=True)
     config_json = Column(Text, nullable=True)  # JSON string: extra settings
+    usage_instructions = Column(Text, nullable=True)  # Markdown usage instructions
     is_enabled = Column(Boolean, nullable=False, server_default='1', index=True)
     usage_count = Column(Integer, nullable=False, server_default='0')
     created_by = Column(String, nullable=True)
@@ -89,6 +90,7 @@ class AgentCreate(BaseModel):
     tags: list[str] = Field(default_factory=list)
     default_llm_model: str | None = None
     config_json: str | None = None
+    usage_instructions: str | None = None
     skill_ids: list[str] = Field(default_factory=list)
 
 
@@ -116,11 +118,19 @@ class AgentInfo(BaseModel):
     updated_at: datetime
 
 
+class SkillBrief(BaseModel):
+    id: str
+    name: str
+    description: str | None = None
+
+
 class AgentDetail(AgentInfo):
     system_prompt: str | None
     default_llm_model: str | None
     config_json: str | None
+    usage_instructions: str | None = None
     skill_ids: list[str] = Field(default_factory=list)
+    skills: list[SkillBrief] = Field(default_factory=list)
     is_favorited: bool = False
 
 

@@ -1,23 +1,64 @@
 import React from "react";
-import { useNavigate } from "react-router";
 import {
   AgentService,
   type AgentInfo,
 } from "#/api/custom-skill-service/agent-service.api";
 import { AgentCard } from "./agent-card";
+import { cn } from "#/utils/utils";
+
+const PAGE_SIZE = 12;
+const SEARCH_HISTORY_KEY = "hiclaw_agent_search_history";
+const MAX_HISTORY = 8;
+
+const SORT_OPTIONS = [
+  { value: "created_at:desc", label: "最新创建" },
+  { value: "created_at:asc", label: "最早创建" },
+  { value: "usage_count:desc", label: "使用最多" },
+  { value: "name:asc", label: "名称 A-Z" },
+  { value: "name:desc", label: "名称 Z-A" },
+];
+
+function loadSearchHistory(): string[] {
+  try {
+    return JSON.parse(localStorage.getItem(SEARCH_HISTORY_KEY) || "[]");
+  } catch {
+    return [];
+  }
+}
+
+function saveSearchHistory(history: string[]) {
+  localStorage.setItem(SEARCH_HISTORY_KEY, JSON.stringify(history.slice(0, MAX_HISTORY)));
+}
 
 export function AgentCenterPage() {
-  const navigate = useNavigate();
   const [agents, setAgents] = React.useState<AgentInfo[]>([]);
   const [total, setTotal] = React.useState(0);
   const [loading, setLoading] = React.useState(true);
-  const [search, setSearch] = React.useState("");
-  const [category, setCategory] = React.useState("");
-  const [categories, setCategories] = React.useState<string[]>([]);
-  const [favorites, setFavorites] = React.useState<Set<string>>(new Set());
-  const [showCreateModal, setShowCreateModal] = React.useState(false);
 
-  // Create form state
+  // Search
+  const [searchInput, setSearchInput] = React.useState("");
+  const [search, setSearch] = React.useState("");
+  const [searchHistory, setSearchHistory] = React.useState<string[]>(loadSearchHistory);
+  const [showHistory, setShowHistory] = React.useState(false);
+  const searchRef = React.useRef<HTMLDivElement>(null);
+
+  // Filters
+  const [category, setCategory] = React.useState("");
+  const [tag, setTag] = React.useState("");
+  const [createdBy, setCreatedBy] = React.useState("");
+  const [categories, setCategories] = React.useState<string[]>([]);
+  const [creators, setCreators] = React.useState<string[]>([]);
+  const [allTags, setAllTags] = React.useState<string[]>([]);
+
+  // Sort & Pagination
+  const [sortKey, setSortKey] = React.useState("created_at:desc");
+  const [page, setPage] = React.useState(0);
+
+  // Favorites
+  const [favorites, setFavorites] = React.useState<Set<string>>(new Set());
+
+  // Create modal
+  const [showCreateModal, setShowCreateModal] = React.useState(false);
   const [newName, setNewName] = React.useState("");
   const [newDesc, setNewDesc] = React.useState("");
   const [newCategory, setNewCategory] = React.useState("");
@@ -25,12 +66,32 @@ export function AgentCenterPage() {
   const [newTags, setNewTags] = React.useState("");
   const [creating, setCreating] = React.useState(false);
 
+  // Close search history dropdown on outside click
+  React.useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(e.target as Node)) {
+        setShowHistory(false);
+      }
+    };
+    document.addEventListener("mousedown", handler);
+    return () => document.removeEventListener("mousedown", handler);
+  }, []);
+
+  // Fetch agents
   const fetchAgents = React.useCallback(async () => {
     setLoading(true);
     try {
-      const params: Record<string, string | number | boolean> = {};
+      const [sortBy, sortOrder] = sortKey.split(":");
+      const params: Record<string, string | number | boolean> = {
+        sort_by: sortBy,
+        sort_order: sortOrder,
+        limit: PAGE_SIZE,
+        offset: page * PAGE_SIZE,
+      };
       if (search) params.search = search;
       if (category) params.category = category;
+      if (tag) params.tag = tag;
+      if (createdBy) params.created_by = createdBy;
       const data = await AgentService.listAgents(params);
       setAgents(data.agents);
       setTotal(data.total);
@@ -39,19 +100,59 @@ export function AgentCenterPage() {
     } finally {
       setLoading(false);
     }
-  }, [search, category]);
+  }, [search, category, tag, createdBy, sortKey, page]);
 
   React.useEffect(() => {
     fetchAgents();
   }, [fetchAgents]);
 
+  // Load filter options
   React.useEffect(() => {
     AgentService.getCategories().then(setCategories).catch(() => {});
+    AgentService.getCreators().then(setCreators).catch(() => {});
     AgentService.listFavorites()
       .then((data) => setFavorites(new Set(data.agents.map((a) => a.id))))
       .catch(() => {});
+    // Collect unique tags from all agents
+    AgentService.listAgents({ limit: 200 })
+      .then((data) => {
+        const tags = new Set<string>();
+        data.agents.forEach((a) => a.tags.forEach((t) => tags.add(t)));
+        setAllTags(Array.from(tags).sort());
+      })
+      .catch(() => {});
   }, []);
 
+  // Search handlers
+  const handleSearch = () => {
+    const trimmed = searchInput.trim();
+    setSearch(trimmed);
+    setPage(0);
+    if (trimmed) {
+      const updated = [trimmed, ...searchHistory.filter((h) => h !== trimmed)].slice(0, MAX_HISTORY);
+      setSearchHistory(updated);
+      saveSearchHistory(updated);
+    }
+    setShowHistory(false);
+  };
+
+  const handleSearchKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === "Enter") handleSearch();
+  };
+
+  const handlePickHistory = (term: string) => {
+    setSearchInput(term);
+    setSearch(term);
+    setPage(0);
+    setShowHistory(false);
+  };
+
+  const handleClearHistory = () => {
+    setSearchHistory([]);
+    saveSearchHistory([]);
+  };
+
+  // Favorites
   const handleToggleFavorite = async (agentId: string) => {
     try {
       const result = await AgentService.toggleFavorite(agentId);
@@ -66,14 +167,12 @@ export function AgentCenterPage() {
     }
   };
 
+  // Create
   const handleCreate = async () => {
     if (!newName.trim()) return;
     setCreating(true);
     try {
-      const tags = newTags
-        .split(",")
-        .map((t) => t.trim())
-        .filter(Boolean);
+      const tags = newTags.split(",").map((t) => t.trim()).filter(Boolean);
       await AgentService.createAgent({
         name: newName,
         description: newDesc || undefined,
@@ -82,11 +181,7 @@ export function AgentCenterPage() {
         tags,
       });
       setShowCreateModal(false);
-      setNewName("");
-      setNewDesc("");
-      setNewCategory("");
-      setNewPrompt("");
-      setNewTags("");
+      setNewName(""); setNewDesc(""); setNewCategory(""); setNewPrompt(""); setNewTags("");
       fetchAgents();
     } catch (e) {
       console.error("Failed to create agent:", e);
@@ -95,71 +190,122 @@ export function AgentCenterPage() {
     }
   };
 
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
   return (
     <div className="h-full flex flex-col p-6 text-white overflow-auto custom-scrollbar">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex items-center justify-between mb-5">
         <div>
           <h1 className="text-2xl font-bold">Agent 中心</h1>
-          <p className="text-sm text-gray-400 mt-1">
-            共 {total} 个 Agent
-          </p>
+          <p className="text-sm text-gray-400 mt-1">共 {total} 个 Agent</p>
         </div>
-        <button
-          type="button"
-          onClick={() => setShowCreateModal(true)}
-          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition"
-        >
+        <button type="button" onClick={() => setShowCreateModal(true)}
+          className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-lg text-sm font-medium transition">
           + 创建 Agent
         </button>
       </div>
 
-      {/* Search & Filter */}
-      <div className="flex gap-3 mb-6">
-        <input
-          type="text"
-          placeholder="搜索 Agent 名称或描述..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="flex-1 px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-blue-500"
-        />
-        <select
-          value={category}
-          onChange={(e) => setCategory(e.target.value)}
-          className="px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded-lg text-sm text-white focus:outline-none focus:border-blue-500"
-        >
+      {/* Search with history */}
+      <div className="flex gap-3 mb-4">
+        <div className="flex-1 relative" ref={searchRef}>
+          <div className="flex">
+            <input type="text" placeholder="搜索 Agent 名称或描述..."
+              value={searchInput} onChange={(e) => setSearchInput(e.target.value)}
+              onFocus={() => searchHistory.length > 0 && setShowHistory(true)}
+              onKeyDown={handleSearchKeyDown}
+              className="flex-1 px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded-l-lg text-sm text-white placeholder:text-gray-500 focus:outline-none focus:border-blue-500" />
+            <button type="button" onClick={handleSearch}
+              className="px-4 py-2 bg-blue-600 hover:bg-blue-700 rounded-r-lg text-sm transition">
+              搜索
+            </button>
+          </div>
+          {/* Search history dropdown */}
+          {showHistory && searchHistory.length > 0 && (
+            <div className="absolute top-full left-0 right-0 mt-1 bg-[#161b22] border border-[#30363d] rounded-lg z-10 shadow-lg">
+              <div className="flex items-center justify-between px-3 py-1.5 border-b border-[#30363d]">
+                <span className="text-xs text-gray-500">搜索历史</span>
+                <button type="button" onClick={handleClearHistory} className="text-xs text-gray-500 hover:text-red-400">清除</button>
+              </div>
+              {searchHistory.map((term) => (
+                <button key={term} type="button" onClick={() => handlePickHistory(term)}
+                  className="w-full text-left px-3 py-1.5 text-sm text-gray-300 hover:bg-[#21262d] transition">
+                  {term}
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Filters & Sort */}
+      <div className="flex flex-wrap gap-3 mb-5">
+        <select value={category} onChange={(e) => { setCategory(e.target.value); setPage(0); }}
+          className="px-3 py-1.5 bg-[#0d1117] border border-[#30363d] rounded-lg text-sm text-white focus:outline-none focus:border-blue-500">
           <option value="">全部分类</option>
-          {categories.map((c) => (
-            <option key={c} value={c}>
-              {c}
-            </option>
-          ))}
+          {categories.map((c) => <option key={c} value={c}>{c}</option>)}
         </select>
+        <select value={tag} onChange={(e) => { setTag(e.target.value); setPage(0); }}
+          className="px-3 py-1.5 bg-[#0d1117] border border-[#30363d] rounded-lg text-sm text-white focus:outline-none focus:border-blue-500">
+          <option value="">全部标签</option>
+          {allTags.map((t) => <option key={t} value={t}>{t}</option>)}
+        </select>
+        <select value={createdBy} onChange={(e) => { setCreatedBy(e.target.value); setPage(0); }}
+          className="px-3 py-1.5 bg-[#0d1117] border border-[#30363d] rounded-lg text-sm text-white focus:outline-none focus:border-blue-500">
+          <option value="">全部创建者</option>
+          {creators.map((c) => <option key={c} value={c}>{c}</option>)}
+        </select>
+        <select value={sortKey} onChange={(e) => { setSortKey(e.target.value); setPage(0); }}
+          className="px-3 py-1.5 bg-[#0d1117] border border-[#30363d] rounded-lg text-sm text-white focus:outline-none focus:border-blue-500">
+          {SORT_OPTIONS.map((opt) => <option key={opt.value} value={opt.value}>{opt.label}</option>)}
+        </select>
+        {(search || category || tag || createdBy) && (
+          <button type="button"
+            onClick={() => { setSearch(""); setSearchInput(""); setCategory(""); setTag(""); setCreatedBy(""); setPage(0); }}
+            className="px-3 py-1.5 text-sm text-gray-400 hover:text-white transition">
+            清除筛选
+          </button>
+        )}
       </div>
 
       {/* Agent Grid */}
       {loading ? (
-        <div className="flex-1 flex items-center justify-center">
-          <p className="text-gray-500">加载中...</p>
-        </div>
+        <div className="flex-1 flex items-center justify-center"><p className="text-gray-500">加载中...</p></div>
       ) : agents.length === 0 ? (
         <div className="flex-1 flex flex-col items-center justify-center">
           <p className="text-gray-500 mb-2">暂无 Agent</p>
-          <p className="text-gray-600 text-sm">
-            点击"创建 Agent"开始配置你的第一个 Agent
-          </p>
+          <p className="text-gray-600 text-sm">点击"创建 Agent"开始配置你的第一个 Agent</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
-          {agents.map((agent) => (
-            <AgentCard
-              key={agent.id}
-              agent={agent}
-              isFavorited={favorites.has(agent.id)}
-              onToggleFavorite={handleToggleFavorite}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4">
+            {agents.map((agent) => (
+              <AgentCard key={agent.id} agent={agent} searchTerm={search}
+                isFavorited={favorites.has(agent.id)} onToggleFavorite={handleToggleFavorite} />
+            ))}
+          </div>
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-6">
+              <button type="button" onClick={() => setPage((p) => Math.max(0, p - 1))} disabled={page === 0}
+                className="px-3 py-1.5 text-sm rounded bg-[#21262d] text-gray-300 hover:bg-[#30363d] disabled:opacity-40 transition">
+                上一页
+              </button>
+              {Array.from({ length: totalPages }, (_, i) => (
+                <button key={i} type="button" onClick={() => setPage(i)}
+                  className={cn("w-8 h-8 text-sm rounded transition",
+                    i === page ? "bg-blue-600 text-white" : "bg-[#21262d] text-gray-300 hover:bg-[#30363d]")}>
+                  {i + 1}
+                </button>
+              ))}
+              <button type="button" onClick={() => setPage((p) => Math.min(totalPages - 1, p + 1))} disabled={page >= totalPages - 1}
+                className="px-3 py-1.5 text-sm rounded bg-[#21262d] text-gray-300 hover:bg-[#30363d] disabled:opacity-40 transition">
+                下一页
+              </button>
+            </div>
+          )}
+        </>
       )}
 
       {/* Create Modal */}
@@ -167,84 +313,43 @@ export function AgentCenterPage() {
         <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50">
           <div className="bg-[#161b22] border border-[#30363d] rounded-xl p-6 w-full max-w-lg">
             <h2 className="text-lg font-bold mb-4">创建 Agent</h2>
-
             <div className="space-y-3">
               <div>
-                <label className="text-sm text-gray-400 block mb-1">
-                  名称 *
-                </label>
-                <input
-                  type="text"
-                  value={newName}
-                  onChange={(e) => setNewName(e.target.value)}
+                <label className="text-sm text-gray-400 block mb-1">名称 *</label>
+                <input type="text" value={newName} onChange={(e) => setNewName(e.target.value)}
                   placeholder="例如：性能分析 Agent"
-                  className="w-full px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded text-sm text-white focus:outline-none focus:border-blue-500"
-                />
+                  className="w-full px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded text-sm text-white focus:outline-none focus:border-blue-500" />
               </div>
               <div>
-                <label className="text-sm text-gray-400 block mb-1">
-                  描述
-                </label>
-                <input
-                  type="text"
-                  value={newDesc}
-                  onChange={(e) => setNewDesc(e.target.value)}
+                <label className="text-sm text-gray-400 block mb-1">描述</label>
+                <input type="text" value={newDesc} onChange={(e) => setNewDesc(e.target.value)}
                   placeholder="Agent 的功能描述"
-                  className="w-full px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded text-sm text-white focus:outline-none focus:border-blue-500"
-                />
+                  className="w-full px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded text-sm text-white focus:outline-none focus:border-blue-500" />
               </div>
               <div>
-                <label className="text-sm text-gray-400 block mb-1">
-                  分类
-                </label>
-                <input
-                  type="text"
-                  value={newCategory}
-                  onChange={(e) => setNewCategory(e.target.value)}
+                <label className="text-sm text-gray-400 block mb-1">分类</label>
+                <input type="text" value={newCategory} onChange={(e) => setNewCategory(e.target.value)}
                   placeholder="例如：performance, development"
-                  className="w-full px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded text-sm text-white focus:outline-none focus:border-blue-500"
-                />
+                  className="w-full px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded text-sm text-white focus:outline-none focus:border-blue-500" />
               </div>
               <div>
-                <label className="text-sm text-gray-400 block mb-1">
-                  标签（逗号分隔）
-                </label>
-                <input
-                  type="text"
-                  value={newTags}
-                  onChange={(e) => setNewTags(e.target.value)}
+                <label className="text-sm text-gray-400 block mb-1">标签（逗号分隔）</label>
+                <input type="text" value={newTags} onChange={(e) => setNewTags(e.target.value)}
                   placeholder="例如：perfetto, android, trace"
-                  className="w-full px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded text-sm text-white focus:outline-none focus:border-blue-500"
-                />
+                  className="w-full px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded text-sm text-white focus:outline-none focus:border-blue-500" />
               </div>
               <div>
-                <label className="text-sm text-gray-400 block mb-1">
-                  系统提示词
-                </label>
-                <textarea
-                  value={newPrompt}
-                  onChange={(e) => setNewPrompt(e.target.value)}
-                  rows={4}
+                <label className="text-sm text-gray-400 block mb-1">系统提示词</label>
+                <textarea value={newPrompt} onChange={(e) => setNewPrompt(e.target.value)} rows={4}
                   placeholder="Agent 的系统提示词，定义其行为和能力..."
-                  className="w-full px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded text-sm text-white focus:outline-none focus:border-blue-500 resize-none"
-                />
+                  className="w-full px-3 py-2 bg-[#0d1117] border border-[#30363d] rounded text-sm text-white focus:outline-none focus:border-blue-500 resize-none" />
               </div>
             </div>
-
             <div className="flex justify-end gap-3 mt-6">
-              <button
-                type="button"
-                onClick={() => setShowCreateModal(false)}
-                className="px-4 py-2 text-sm text-gray-400 hover:text-white transition"
-              >
-                取消
-              </button>
-              <button
-                type="button"
-                onClick={handleCreate}
-                disabled={!newName.trim() || creating}
-                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg text-sm font-medium transition"
-              >
+              <button type="button" onClick={() => setShowCreateModal(false)}
+                className="px-4 py-2 text-sm text-gray-400 hover:text-white transition">取消</button>
+              <button type="button" onClick={handleCreate} disabled={!newName.trim() || creating}
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 disabled:opacity-50 rounded-lg text-sm font-medium transition">
                 {creating ? "创建中..." : "创建"}
               </button>
             </div>

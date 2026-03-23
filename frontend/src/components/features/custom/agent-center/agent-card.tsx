@@ -7,9 +7,27 @@ interface AgentCardProps {
   agent: AgentInfo;
   onToggleFavorite?: (agentId: string) => void;
   isFavorited?: boolean;
+  searchTerm?: string;
 }
 
-export function AgentCard({ agent, onToggleFavorite, isFavorited }: AgentCardProps) {
+function HighlightText({ text, highlight }: { text: string; highlight?: string }) {
+  if (!highlight || !text) return <>{text}</>;
+  const escaped = highlight.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const parts = text.split(new RegExp(`(${escaped})`, "gi"));
+  return (
+    <>
+      {parts.map((part, i) =>
+        part.toLowerCase() === highlight.toLowerCase() ? (
+          <mark key={i} className="bg-yellow-500/30 text-yellow-300 rounded-sm px-0.5">{part}</mark>
+        ) : (
+          <React.Fragment key={i}>{part}</React.Fragment>
+        ),
+      )}
+    </>
+  );
+}
+
+export function AgentCard({ agent, onToggleFavorite, isFavorited, searchTerm }: AgentCardProps) {
   const navigate = useNavigate();
 
   return (
@@ -23,28 +41,20 @@ export function AgentCard({ agent, onToggleFavorite, isFavorited }: AgentCardPro
     >
       <div className="flex items-start justify-between mb-2">
         <h3 className="text-white font-semibold text-base truncate flex-1">
-          {agent.name}
+          <HighlightText text={agent.name} highlight={searchTerm} />
         </h3>
         <div className="flex items-center gap-2 ml-2 shrink-0">
           {!agent.is_enabled && (
-            <span className="text-xs px-2 py-0.5 rounded bg-red-900/30 text-red-400">
-              已停用
-            </span>
+            <span className="text-xs px-2 py-0.5 rounded bg-red-900/30 text-red-400">已停用</span>
           )}
           {onToggleFavorite && (
-            <button
-              type="button"
-              onClick={(e) => {
-                e.stopPropagation();
-                onToggleFavorite(agent.id);
-              }}
-              className="text-gray-500 hover:text-yellow-400 transition"
-            >
+            <button type="button"
+              onClick={(e) => { e.stopPropagation(); onToggleFavorite(agent.id); }}
+              className="text-gray-500 hover:text-yellow-400 transition">
               <svg width="16" height="16" viewBox="0 0 24 24"
                 fill={isFavorited ? "currentColor" : "none"}
                 stroke="currentColor" strokeWidth="2"
-                className={isFavorited ? "text-yellow-400" : ""}
-              >
+                className={isFavorited ? "text-yellow-400" : ""}>
                 <path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z" />
               </svg>
             </button>
@@ -53,17 +63,12 @@ export function AgentCard({ agent, onToggleFavorite, isFavorited }: AgentCardPro
       </div>
 
       <p className="text-gray-400 text-sm line-clamp-2 mb-3 min-h-[2.5rem]">
-        {agent.description || "暂无描述"}
+        <HighlightText text={agent.description || "暂无描述"} highlight={searchTerm} />
       </p>
 
       <div className="flex flex-wrap gap-1 mb-3">
-        {agent.tags.slice(0, 3).map((tag) => (
-          <span
-            key={tag}
-            className="text-xs px-2 py-0.5 rounded bg-blue-900/30 text-blue-400"
-          >
-            {tag}
-          </span>
+        {agent.tags.slice(0, 3).map((t) => (
+          <span key={t} className="text-xs px-2 py-0.5 rounded bg-blue-900/30 text-blue-400">{t}</span>
         ))}
         {agent.tags.length > 3 && (
           <span className="text-xs text-gray-500">+{agent.tags.length - 3}</span>

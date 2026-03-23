@@ -100,6 +100,15 @@ export function Sidebar() {
           </div>
 
           <div className="flex flex-row md:flex-col md:items-center gap-[26px]">
+            {/* >>> CUSTOM: HiClaw - User ID display <<< */}
+            {user.data?.login && (
+              <div className="hidden md:flex items-center justify-center w-full px-1" title={user.data.login}>
+                <span className="text-[10px] text-gray-500 truncate max-w-[70px] text-center">
+                  {user.data.login}
+                </span>
+              </div>
+            )}
+            {/* >>> END CUSTOM <<< */}
             <UserActions
               user={
                 user.data ? { avatar_url: user.data.avatar_url } : undefined
