@@ -13,6 +13,7 @@ import { useSubConversationTaskPolling } from "#/hooks/query/use-sub-conversatio
 import { isTaskPolling } from "#/utils/utils";
 // >>> CUSTOM: HiClaw <<<
 import { SkillActiveBadge } from "#/components/features/custom/skill-management/skill-active-badge";
+import { PerfAnalysisInlinePanel } from "#/components/features/custom/skill-management/perf-analysis-inline-panel";
 // >>> END CUSTOM <<<
 
 interface InteractiveChatBoxProps {
@@ -31,15 +32,36 @@ export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
     addImageLoading,
     removeImageLoading,
     subConversationTaskId,
+    setShouldHideSuggestions,
   } = useConversationStore();
 
   // >>> CUSTOM: HiClaw — Skill activation state <<<
   const [activeSkillName, setActiveSkillName] = React.useState<string | null>(null);
+  const [showPerfPanel, setShowPerfPanel] = React.useState(false);
+
+  const PERF_SKILL_NAMES = ["perf-analysis-workflow", "performance-analysis", "perf-analyze"];
 
   const handleActivateSkill = React.useCallback((skillName: string, content: string) => {
+    if (PERF_SKILL_NAMES.some(n => skillName.toLowerCase().includes(n.toLowerCase()))) {
+      setActiveSkillName(skillName);
+      setShowPerfPanel(true);
+      setShouldHideSuggestions(true);
+      return;
+    }
     setActiveSkillName(skillName);
     onSubmit(content, [], []);
+  }, [onSubmit, setShouldHideSuggestions]);
+
+  const handlePerfSubmit = React.useCallback((_tracePath: string, message: string) => {
+    setShowPerfPanel(false);
+    onSubmit(message, [], []);
   }, [onSubmit]);
+
+  const handlePerfDismiss = React.useCallback(() => {
+    setShowPerfPanel(false);
+    setActiveSkillName(null);
+    setShouldHideSuggestions(false);
+  }, [setShouldHideSuggestions]);
 
   const handleDismissSkill = React.useCallback(() => {
     setActiveSkillName(null);
@@ -172,6 +194,13 @@ export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
         <div className="mb-2">
           <SkillActiveBadge skillName={activeSkillName} onDismiss={handleDismissSkill} />
         </div>
+      )}
+      {showPerfPanel && (
+        <PerfAnalysisInlinePanel
+          onSubmit={handlePerfSubmit}
+          onDismiss={handlePerfDismiss}
+          disabled={isDisabled}
+        />
       )}
       {/* >>> END CUSTOM <<< */}
       <CustomChatInput

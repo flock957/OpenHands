@@ -72,3 +72,45 @@ async def load_custom_skills() -> list[Skill]:
     except Exception as e:
         _logger.warning(f'Failed to load custom skills: {e}', exc_info=True)
         return []
+
+
+def load_file_skills() -> list[Skill]:
+    """Load skill .md files from custom/skill_examples/perf_skills/ directory."""
+    import pathlib
+    import frontmatter
+
+    skills: list[Skill] = []
+    skill_dirs = [
+        pathlib.Path(__file__).parent.parent / 'skill_examples' / 'perf_skills',
+    ]
+
+    for skill_dir in skill_dirs:
+        if not skill_dir.exists():
+            continue
+        for md_file in sorted(skill_dir.glob('*.md')):
+            try:
+                post = frontmatter.load(str(md_file))
+                meta = post.metadata or {}
+                name = meta.get('name', md_file.stem)
+                triggers = meta.get('triggers', [])
+                content = post.content
+
+                trigger = None
+                if triggers:
+                    if any(t.startswith('/') for t in triggers):
+                        trigger = TaskTrigger(triggers=triggers)
+                    else:
+                        trigger = KeywordTrigger(keywords=triggers)
+
+                skills.append(Skill(
+                    name=name,
+                    content=content,
+                    trigger=trigger,
+                    source='file-skill',
+                    is_agentskills_format=False,
+                ))
+            except Exception as e:
+                _logger.warning(f'Failed to load skill file {md_file}: {e}')
+
+    _logger.info(f'Loaded {len(skills)} file-based skills: {[s.name for s in skills]}')
+    return skills
