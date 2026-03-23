@@ -2,7 +2,6 @@ import { useState, useCallback, useEffect, useMemo, useRef } from "react";
 import { useConversationSkills } from "#/hooks/query/use-conversation-skills";
 import { Skill } from "#/api/conversation-service/v1-conversation-service.types";
 import { Microagent } from "#/api/open-hands.types";
-import { parseSkillInputs, type SkillInputField } from "#/utils/parse-skill-inputs";
 
 export type SlashCommandSkill = Skill | Microagent;
 
@@ -11,14 +10,6 @@ export interface SlashCommandItem {
   /** The slash command string, e.g. "/random-number" */
   command: string;
 }
-
-// >>> CUSTOM: HiClaw <<<
-export interface SkillWithInputsInfo {
-  name: string;
-  trigger: string | undefined;
-  inputs: SkillInputField[];
-}
-// >>> END CUSTOM <<<
 
 /** Get the cursor's character offset within a contentEditable element. */
 function getCursorOffset(element: HTMLElement): number {
@@ -38,7 +29,6 @@ function getCursorOffset(element: HTMLElement): number {
  */
 export const useSlashCommand = (
   chatInputRef: React.RefObject<HTMLDivElement | null>,
-  onSkillWithInputs?: (info: SkillWithInputsInfo) => void,
 ) => {
   const { data: skills } = useConversationSkills();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -87,9 +77,6 @@ export const useSlashCommand = (
   filteredItemsRef.current = filteredItems;
   const selectedIndexRef = useRef(selectedIndex);
   selectedIndexRef.current = selectedIndex;
-  const onSkillWithInputsRef = useRef(onSkillWithInputs);
-  onSkillWithInputsRef.current = onSkillWithInputs;
-
   // Reset selected index when the filter text changes
   useEffect(() => {
     setSelectedIndex(0);
@@ -153,40 +140,6 @@ export const useSlashCommand = (
     (item: SlashCommandItem) => {
       const element = chatInputRef.current;
       if (!element) return;
-
-      // >>> CUSTOM: HiClaw — check if skill has inputs <<<
-      const skillContent = "content" in item.skill ? (item.skill as Skill).content : "";
-      if (skillContent) {
-        const inputs = parseSkillInputs(skillContent);
-        if (inputs.length > 0 && onSkillWithInputsRef.current) {
-          // Clear the input text
-          const slashRange = slashRangeRef.current;
-          const currentText = (element.innerText || "").replace(/[\n\r]+$/, "");
-          if (slashRange) {
-            element.textContent =
-              currentText.slice(0, slashRange.start) +
-              currentText.slice(slashRange.end);
-          } else {
-            element.textContent = "";
-          }
-          element.dispatchEvent(new InputEvent("input", { bubbles: true }));
-
-          setIsMenuOpen(false);
-          setFilterText("");
-          setSelectedIndex(0);
-          slashRangeRef.current = null;
-
-          // Trigger form display
-          const slashTrigger = (item.skill.triggers || []).find((t: string) => t.startsWith("/"));
-          onSkillWithInputsRef.current({
-            name: item.skill.name,
-            trigger: slashTrigger,
-            inputs,
-          });
-          return;
-        }
-      }
-      // >>> END CUSTOM <<<
 
       const slashRange = slashRangeRef.current;
       const currentText = (element.innerText || "").replace(/[\n\r]+$/, "");

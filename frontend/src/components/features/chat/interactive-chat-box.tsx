@@ -13,21 +13,11 @@ import { useSubConversationTaskPolling } from "#/hooks/query/use-sub-conversatio
 import { isTaskPolling } from "#/utils/utils";
 // >>> CUSTOM: HiClaw <<<
 import { SkillActiveBadge } from "#/components/features/custom/skill-management/skill-active-badge";
-import { SkillInputForm } from "#/components/features/custom/skill-management/skill-input-form";
-import { parseSkillInputs, formatSkillMessage, type SkillInputField } from "#/utils/parse-skill-inputs";
 // >>> END CUSTOM <<<
 
 interface InteractiveChatBoxProps {
   onSubmit: (message: string, images: File[], files: File[]) => void;
 }
-
-// >>> CUSTOM: HiClaw <<<
-interface PendingSlashSkill {
-  name: string;
-  trigger: string | undefined;
-  inputs: SkillInputField[];
-}
-// >>> END CUSTOM <<<
 
 export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
   const {
@@ -45,39 +35,13 @@ export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
 
   // >>> CUSTOM: HiClaw <<<
   const [activeSkillName, setActiveSkillName] = React.useState<string | null>(null);
-  const [pendingSlashSkill, setPendingSlashSkill] = React.useState<PendingSlashSkill | null>(null);
 
   const handleActivateSkill = React.useCallback((skillName: string, content: string) => {
-    // Check if this skill has inputs by parsing the content
-    // For the SkillSelector path, inputs are handled inside SkillSelector itself.
-    // This callback is for direct activation (no inputs) or from SkillSelector after form submit.
     setActiveSkillName(skillName);
     onSubmit(content, [], []);
   }, [onSubmit]);
 
   const handleDismissSkill = React.useCallback(() => { setActiveSkillName(null); }, []);
-
-  // Called from slash command when a skill with inputs is selected
-  const handleSlashSkillWithInputs = React.useCallback((skill: PendingSlashSkill) => {
-    setPendingSlashSkill(skill);
-  }, []);
-
-  const handleSlashFormSubmit = React.useCallback((values: Record<string, string>) => {
-    if (!pendingSlashSkill) return;
-    const message = formatSkillMessage(
-      pendingSlashSkill.name,
-      pendingSlashSkill.trigger,
-      pendingSlashSkill.inputs,
-      values,
-    );
-    setActiveSkillName(pendingSlashSkill.name);
-    setPendingSlashSkill(null);
-    onSubmit(message, [], []);
-  }, [pendingSlashSkill, onSubmit]);
-
-  const handleSlashFormCancel = React.useCallback(() => {
-    setPendingSlashSkill(null);
-  }, []);
   // >>> END CUSTOM <<<
 
   const { curAgentState } = useAgentState();
@@ -203,17 +167,7 @@ export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
   return (
     <div data-testid="interactive-chat-box">
       {/* >>> CUSTOM: HiClaw <<< */}
-      {pendingSlashSkill && (
-        <div className="mb-2">
-          <SkillInputForm
-            skillName={pendingSlashSkill.name}
-            inputs={pendingSlashSkill.inputs}
-            onSubmit={handleSlashFormSubmit}
-            onCancel={handleSlashFormCancel}
-          />
-        </div>
-      )}
-      {activeSkillName && !pendingSlashSkill && (
+      {activeSkillName && (
         <div className="mb-2">
           <SkillActiveBadge skillName={activeSkillName} onDismiss={handleDismissSkill} />
         </div>
@@ -226,7 +180,6 @@ export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
         conversationStatus={conversation?.status || null}
         // >>> CUSTOM: HiClaw <<<
         onActivateSkill={handleActivateSkill}
-        onSlashSkillWithInputs={handleSlashSkillWithInputs}
         // >>> END CUSTOM <<<
       />
       <div className="mt-4">

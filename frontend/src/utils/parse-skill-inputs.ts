@@ -56,8 +56,8 @@ export function parseSkillInputs(content: string): SkillInputField[] {
   let current: Partial<SkillInputField> | null = null;
 
   for (const line of afterInputs.split("\n")) {
-    // Stop if we hit a top-level key (no leading whitespace)
-    if (/^\S/.test(line) && line.trim() !== "") break;
+    // Stop if we hit a top-level key (no leading whitespace, not a list item)
+    if (/^[a-zA-Z_]/.test(line) && line.trim() !== "") break;
 
     const trimmed = line.trim();
     if (!trimmed) continue;

@@ -1,18 +1,11 @@
 import React from "react";
 import SkillService, { SkillInfo } from "#/api/custom-skill-service/skill-service.api";
-import { parseSkillInputs, formatSkillMessage, type SkillInputField } from "#/utils/parse-skill-inputs";
-import { SkillInputForm } from "./skill-input-form";
+import { parseSkillInputs } from "#/utils/parse-skill-inputs";
+import { useSkillInputStore } from "#/stores/skill-input-store";
 
 interface Props {
   disabled: boolean;
   onActivateSkill: (skillName: string, triggerMessage: string) => void;
-}
-
-interface PendingSkill {
-  skill: SkillInfo;
-  inputs: SkillInputField[];
-  trigger: string | undefined;
-  content: string;
 }
 
 export function SkillSelector({ disabled, onActivateSkill }: Props) {
@@ -20,8 +13,8 @@ export function SkillSelector({ disabled, onActivateSkill }: Props) {
   const [skills, setSkills] = React.useState<SkillInfo[]>([]);
   const [loading, setLoading] = React.useState(false);
   const [search, setSearch] = React.useState("");
-  const [pendingSkill, setPendingSkill] = React.useState<PendingSkill | null>(null);
   const menuRef = React.useRef<HTMLDivElement>(null);
+  const { setPending } = useSkillInputStore();
 
   React.useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -53,49 +46,24 @@ export function SkillSelector({ disabled, onActivateSkill }: Props) {
 
   const handleSelect = async (skill: SkillInfo) => {
     setIsOpen(false);
-
     const slashTrigger = skill.triggers.find((t) => t.startsWith("/"));
 
-    // Fetch detail to get content for input parsing
-    try {
-      const detail = await SkillService.getSkill(skill.id);
-      const inputs = parseSkillInputs(detail.content);
-
-      if (inputs.length > 0) {
-        // Skill needs user input — show the form
-        setPendingSkill({
-          skill,
-          inputs,
-          trigger: slashTrigger,
-          content: detail.content,
-        });
-        return;
-      }
-    } catch (e) {
-      console.error("Failed to fetch skill detail:", e);
-    }
-
-    // No inputs needed — activate directly
+    // Always activate the skill first
     const triggerMessage = slashTrigger
       ? `Execute skill: ${skill.name} (trigger: ${slashTrigger}). Follow the skill instructions to complete the task.`
       : `Execute skill: ${skill.name}. Follow the skill instructions to complete the task.`;
     onActivateSkill(skill.name, triggerMessage);
-  };
 
-  const handleFormSubmit = (values: Record<string, string>) => {
-    if (!pendingSkill) return;
-    const message = formatSkillMessage(
-      pendingSkill.skill.name,
-      pendingSkill.trigger,
-      pendingSkill.inputs,
-      values,
-    );
-    onActivateSkill(pendingSkill.skill.name, message);
-    setPendingSkill(null);
-  };
-
-  const handleFormCancel = () => {
-    setPendingSkill(null);
+    // Then check if skill needs user inputs — if so, show form in chat stream
+    try {
+      const detail = await SkillService.getSkill(skill.id);
+      const inputs = parseSkillInputs(detail.content);
+      if (inputs.length > 0) {
+        setPending({ skillName: skill.name, trigger: slashTrigger, inputs });
+      }
+    } catch (e) {
+      // Skill activated anyway, just no form
+    }
   };
 
   const filtered = search
@@ -105,20 +73,6 @@ export function SkillSelector({ disabled, onActivateSkill }: Props) {
           (s.description || "").toLowerCase().includes(search.toLowerCase()),
       )
     : skills;
-
-  // When a skill needs input, render the form instead of the menu
-  if (pendingSkill) {
-    return (
-      <div className="absolute bottom-full left-0 right-0 mb-2 z-50">
-        <SkillInputForm
-          skillName={pendingSkill.skill.name}
-          inputs={pendingSkill.inputs}
-          onSubmit={handleFormSubmit}
-          onCancel={handleFormCancel}
-        />
-      </div>
-    );
-  }
 
   return (
     <div className="relative" ref={menuRef}>
@@ -140,11 +94,12 @@ export function SkillSelector({ disabled, onActivateSkill }: Props) {
         </svg>
       </button>
 
+      {/* Skill list dropdown */}
       {isOpen && (
         <div className="absolute bottom-full left-0 mb-2 w-[340px] max-h-[400px] bg-[#24272E] border border-[#444] rounded-lg shadow-xl z-50 flex flex-col overflow-hidden">
           <div className="px-3 py-2 border-b border-[#333] flex items-center justify-between">
             <span className="text-sm font-medium text-white">选择 Skill</span>
-            <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white text-sm">&times;</button>
+            <button type="button" onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white text-sm">&times;</button>
           </div>
           <div className="px-3 py-2 border-b border-[#333]">
             <input
@@ -153,7 +108,6 @@ export function SkillSelector({ disabled, onActivateSkill }: Props) {
               onChange={(e) => setSearch(e.target.value)}
               placeholder="搜索 Skill..."
               className="w-full px-2 py-1.5 bg-[#1a1d24] border border-[#444] rounded text-xs text-white focus:outline-none focus:border-blue-500"
-              autoFocus
             />
           </div>
           <div className="flex-1 overflow-y-auto">
@@ -166,6 +120,7 @@ export function SkillSelector({ disabled, onActivateSkill }: Props) {
             ) : (
               filtered.map((skill) => (
                 <button
+                  type="button"
                   key={skill.id}
                   onClick={() => handleSelect(skill)}
                   className="w-full text-left px-3 py-2.5 hover:bg-[#2a2d35] transition border-b border-[#1a1d24] last:border-b-0"

@@ -5,7 +5,7 @@ import { useFileHandling } from "#/hooks/chat/use-file-handling";
 import { useGripResize } from "#/hooks/chat/use-grip-resize";
 import { useChatInputEvents } from "#/hooks/chat/use-chat-input-events";
 import { useChatSubmission } from "#/hooks/chat/use-chat-submission";
-import { useSlashCommand, type SkillWithInputsInfo } from "#/hooks/chat/use-slash-command";
+import { useSlashCommand } from "#/hooks/chat/use-slash-command";
 import { ChatInputGrip } from "./components/chat-input-grip";
 import { ChatInputContainer } from "./components/chat-input-container";
 import { HiddenFileInput } from "./components/hidden-file-input";
@@ -23,7 +23,6 @@ export interface CustomChatInputProps {
   buttonClassName?: React.HTMLAttributes<HTMLButtonElement>["className"];
   // >>> CUSTOM: HiClaw <<<
   onActivateSkill?: (skillName: string, content: string) => void;
-  onSlashSkillWithInputs?: (info: SkillWithInputsInfo) => void;
   // >>> END CUSTOM <<<
 }
 
@@ -38,7 +37,6 @@ export function CustomChatInput({
   className = "",
   buttonClassName = "",
   onActivateSkill,
-  onSlashSkillWithInputs,
 }: CustomChatInputProps) {
   const {
     submittedMessage,
@@ -123,9 +121,6 @@ export function CustomChatInput({
     closeMenu: closeSlashMenu,
   } = useSlashCommand(
     chatInputRef as React.RefObject<HTMLDivElement | null>,
-    // >>> CUSTOM: HiClaw <<<
-    onSlashSkillWithInputs,
-    // >>> END CUSTOM <<<
   );
 
   // Cleanup: reset suggestions visibility when component unmounts
