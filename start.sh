@@ -33,6 +33,11 @@ if [ "$(stat -c %u "$SANDBOX_DATA_DIR" 2>/dev/null)" != "10001" ]; then
 fi
 export SANDBOX_VOLUMES="$SANDBOX_DATA_DIR:/workspace/conversations:rw"
 
+# --- 网络模式 ---
+# 内网环境 host.docker.internal 可能不通，使用 host 网络模式
+# 容器直接共享宿主机网络，无需 host.docker.internal
+export AGENT_SERVER_USE_HOST_NETWORK="${AGENT_SERVER_USE_HOST_NETWORK:-true}"
+
 # --- 确保 Docker 可用 ---
 if ! docker info > /dev/null 2>&1; then
     echo "ERROR: Docker is not running. Please start Docker first."
