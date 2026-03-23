@@ -59,16 +59,20 @@ EOF
 ### 5. 启动服务
 
 ```bash
-# 确保 Docker 正在运行
-docker info > /dev/null 2>&1 || echo "请先启动 Docker"
-
-# 启动后端（前端已打包到 build 目录，由后端静态服务提供）
-poetry run uvicorn openhands.server.listen:app --host 0.0.0.0 --port 3000
+# 推荐：使用启动脚本（自动处理会话持久化、Docker 检查等）
+./start.sh          # 前台运行
+./start.sh -d       # 后台运行
+./start.sh stop     # 停止
 ```
 
-后台运行：
+或手动启动（需自行设置环境变量）：
 ```bash
-nohup poetry run uvicorn openhands.server.listen:app --host 0.0.0.0 --port 3000 > /tmp/openhands.log 2>&1 &
+# 会话持久化：挂载宿主机目录到容器，防止切换会话丢历史
+export SANDBOX_VOLUMES="$HOME/.openhands/sandbox-data:/workspace/conversations:rw"
+mkdir -p $HOME/.openhands/sandbox-data
+sudo chown -R 10001:10001 $HOME/.openhands/sandbox-data
+
+poetry run uvicorn openhands.server.listen:app --host 0.0.0.0 --port 3000
 ```
 
 ### 6. 访问
