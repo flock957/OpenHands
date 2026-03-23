@@ -8,6 +8,8 @@ import { NewProjectButton } from "#/components/shared/buttons/new-project-button
 import { ConversationPanelButton } from "#/components/shared/buttons/conversation-panel-button";
 // >>> CUSTOM: HiClaw <<<
 import { SkillManagementButton } from "#/components/shared/buttons/skill-management-button";
+import { AgentCenterButton } from "#/components/shared/buttons/agent-center-button";
+import { TaskCenterButton } from "#/components/shared/buttons/task-center-button";
 // >>> END CUSTOM <<<
 import { SettingsModal } from "#/components/shared/modals/settings/settings-modal";
 import { useSettings } from "#/hooks/query/use-settings";
@@ -92,6 +94,8 @@ export function Sidebar() {
             />
             {/* >>> CUSTOM: HiClaw <<< */}
             <SkillManagementButton />
+            <AgentCenterButton />
+            <TaskCenterButton />
             {/* >>> END CUSTOM <<< */}
           </div>
 

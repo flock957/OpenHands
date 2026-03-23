@@ -27,6 +27,9 @@ export default [
     route("microagent-management", "routes/microagent-management.tsx"),
     // >>> CUSTOM: HiClaw <<<
     route("skill-management", "routes/skill-management.tsx"),
+    route("agents", "routes/agent-center.tsx"),
+    route("agents/:agentId", "routes/agent-detail.tsx"),
+    route("tasks", "routes/task-center.tsx"),
     // >>> END CUSTOM <<<
     route("oauth/device/verify", "routes/device-verify.tsx"),
   ]),

@@ -31,4 +31,11 @@ try:
     router.include_router(_conv_router)
 except ImportError:
     pass
+try:
+    from custom.agent_mgmt.router import router as _agent_router
+    from custom.agent_mgmt.task_router import router as _task_router
+    router.include_router(_agent_router)
+    router.include_router(_task_router)
+except ImportError:
+    pass
 # >>> END CUSTOM <<<
