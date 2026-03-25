@@ -23,7 +23,6 @@ const LLM_ERROR_KEYWORDS = [
   "invalid_api_key", "authentication", "Unauthorized",
   "model not found", "model_not_found", "does not exist",
 ];
-
 function isLLMConfigError(message: string): boolean {
   const lower = message.toLowerCase();
   return LLM_ERROR_KEYWORDS.some((kw) => lower.includes(kw.toLowerCase()));
@@ -48,20 +47,16 @@ export function ErrorMessageBanner({
 
   const showLLMSwitch = isLLMConfigError(message);
 
-  const loadCurrentSettings = React.useCallback(async () => {
+  const handleOpenModelForm = React.useCallback(async () => {
     try {
       const { data } = await openHands.get("/api/settings");
       setModel(data.llm_model || "");
       setApiKey("");
       setBaseUrl(data.llm_base_url || "");
     } catch { /* ignore */ }
-  }, []);
-
-  const handleOpenModelForm = () => {
-    loadCurrentSettings();
     setShowModelForm(true);
     setSaveMsg("");
-  };
+  }, []);
 
   const handleSaveModel = async () => {
     if (!model.trim()) { setSaveMsg("请填写模型名称"); return; }
@@ -77,8 +72,9 @@ export function ErrorMessageBanner({
         payload,
       );
       setSaveMsg(data.message || "模型已切换");
-    } catch (e: any) {
-      setSaveMsg("切换失败: " + (e.response?.data?.detail || e.message));
+    } catch (e: unknown) {
+      const err = e as { response?: { data?: { detail?: string } }; message?: string };
+      setSaveMsg("切换失败: " + (err.response?.data?.detail || err.message));
     } finally {
       setSaving(false);
     }
@@ -183,7 +179,7 @@ export function ErrorMessageBanner({
           <div className="flex items-center gap-2 flex-wrap">
             {saveMsg && !saveMsg.includes("失败") ? (
               <>
-                <span className="text-xs text-green-400">✓ {saveMsg}</span>
+                <span className="text-xs text-green-400">{"✓ "}{saveMsg}</span>
                 <button type="button" onClick={() => window.location.reload()}
                   className="text-xs px-3 py-1 bg-blue-600 hover:bg-blue-700 rounded font-medium transition">
                   刷新继续

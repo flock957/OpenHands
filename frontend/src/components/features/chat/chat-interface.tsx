@@ -28,6 +28,10 @@ import { useErrorMessageStore } from "#/stores/error-message-store";
 import { useOptimisticUserMessageStore } from "#/stores/optimistic-user-message-store";
 import { ErrorMessageBanner } from "./error-message-banner";
 import { Messages as V1Messages } from "#/components/v1/chat";
+// >>> CUSTOM: HiClaw <<<
+import { useSkillInputStore } from "#/stores/skill-input-store";
+import { SkillInputCard } from "#/components/features/custom/skill-management/skill-input-card";
+// >>> END CUSTOM <<<
 import { useUnifiedUploadFiles } from "#/hooks/mutation/use-unified-upload-files";
 import { useConfig } from "#/hooks/query/use-config";
 import { validateFiles } from "#/utils/file-validation";
@@ -47,6 +51,72 @@ function getEntryPoint(
   if (hasReplayJson) return "replay";
   return "direct";
 }
+
+// >>> CUSTOM: HiClaw <<<
+/**
+ * Renders the skill input form in the chat message stream.
+ * Only shows after the agent has processed the skill and stopped running:
+ * requires seeing a RUNNING → non-RUNNING transition after pending was set.
+ */
+function SkillInputCardInChat() {
+  const pending = useSkillInputStore((s) => s.pending);
+  const visible = useSkillInputStore((s) => s.visible);
+  const showForm = useSkillInputStore((s) => s.show);
+  const clear = useSkillInputStore((s) => s.clear);
+  const { setSubmittedMessage } = useConversationStore();
+  const { data: conversation } = useActiveConversation();
+  const { curAgentState } = useAgentState();
+
+  // Clear pending when conversation changes
+  const conversationId = conversation?.conversation_id;
+  const prevConvRef = React.useRef(conversationId);
+  React.useEffect(() => {
+    if (prevConvRef.current !== conversationId) {
+      clear();
+      prevConvRef.current = conversationId;
+    }
+  }, [conversationId, clear]);
+
+  // Track: we must see the agent go through RUNNING first, then leave RUNNING
+  const sawRunningRef = React.useRef(false);
+  React.useEffect(() => {
+    if (!pending) {
+      sawRunningRef.current = false;
+      return;
+    }
+    if (curAgentState === AgentState.RUNNING) {
+      sawRunningRef.current = true;
+    }
+    // Show form when agent stops running (any non-running state after we saw RUNNING)
+    const agentStopped =
+      curAgentState === AgentState.AWAITING_USER_INPUT ||
+      curAgentState === AgentState.FINISHED ||
+      curAgentState === AgentState.PAUSED ||
+      curAgentState === AgentState.STOPPED;
+    if (sawRunningRef.current && !visible && agentStopped) {
+      showForm();
+    }
+  }, [pending, visible, curAgentState, showForm]);
+
+  const handleSubmit = React.useCallback(
+    (message: string) => {
+      setSubmittedMessage(message);
+    },
+    [setSubmittedMessage],
+  );
+
+  if (!pending || !visible) return null;
+
+  return (
+    <SkillInputCard
+      skillName={pending.skillName}
+      trigger={pending.trigger}
+      inputs={pending.inputs}
+      onSubmit={handleSubmit}
+    />
+  );
+}
+// >>> END CUSTOM <<<
 
 export function ChatInterface() {
   const posthog = usePostHog();
@@ -299,6 +369,10 @@ export function ChatInterface() {
           {showV1Messages && v1UserEventsExist && (
             <V1Messages messages={v1UiEvents} allEvents={v1FullEvents} />
           )}
+
+          {/* >>> CUSTOM: HiClaw — skill input form after agent response <<< */}
+          <SkillInputCardInChat />
+          {/* >>> END CUSTOM <<< */}
         </div>
 
         <div className="flex flex-col gap-[6px]">

@@ -23,13 +23,17 @@ def _get_recaptcha_site_key() -> str | None:
 _OSS_POSTHOG_KEY = 'phc_3ESMmY9SgqEAGBB6sMGK5ayYHkeUuknH2vP6FmWH9RA'
 
 
-def _get_posthog_client_key() -> str:
+def _get_posthog_client_key() -> str | None:
     """Get PostHog client key from environment variable.
 
     Reads POSTHOG_CLIENT_KEY from environment. If not set or empty,
     returns the OSS default key for backwards compatibility.
     """
     key = os.getenv('POSTHOG_CLIENT_KEY', '').strip()
+    # >>> CUSTOM: HiClaw — allow disabling PostHog with "disabled" or "off" <<<
+    if key.lower() in ('disabled', 'off', 'false', 'none', '0'):
+        return None
+    # >>> END CUSTOM <<<
     return key if key else _OSS_POSTHOG_KEY
 
 

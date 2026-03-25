@@ -1,5 +1,7 @@
 import React from "react";
 import SkillService, { SkillInfo } from "#/api/custom-skill-service/skill-service.api";
+import { parseSkillInputs } from "#/utils/parse-skill-inputs";
+import { useSkillInputStore } from "#/stores/skill-input-store";
 
 interface Props {
   disabled: boolean;
@@ -12,6 +14,7 @@ export function SkillSelector({ disabled, onActivateSkill }: Props) {
   const [loading, setLoading] = React.useState(false);
   const [search, setSearch] = React.useState("");
   const menuRef = React.useRef<HTMLDivElement>(null);
+  const { setPending } = useSkillInputStore();
 
   React.useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -41,14 +44,30 @@ export function SkillSelector({ disabled, onActivateSkill }: Props) {
     setIsOpen(!isOpen);
   };
 
-  const handleSelect = (skill: SkillInfo) => {
+  const handleSelect = async (skill: SkillInfo) => {
+    setIsOpen(false);
     const slashTrigger = skill.triggers.find((t) => t.startsWith("/"));
+
+    // Fetch detail FIRST to check for inputs (before activation,
+    // so we can set pending before agent state transitions happen)
+    let inputs: ReturnType<typeof parseSkillInputs> = [];
+    try {
+      const detail = await SkillService.getSkill(skill.id);
+      inputs = parseSkillInputs(detail.content);
+    } catch (e) {
+      // Continue without inputs
+    }
+
+    // Set pending BEFORE activation so we catch RUNNING → AWAITING_USER_INPUT
+    if (inputs.length > 0) {
+      setPending({ skillName: skill.name, trigger: slashTrigger, inputs });
+    }
+
+    // Now activate the skill
     const triggerMessage = slashTrigger
       ? `Execute skill: ${skill.name} (trigger: ${slashTrigger}). Follow the skill instructions to complete the task.`
       : `Execute skill: ${skill.name}. Follow the skill instructions to complete the task.`;
-
     onActivateSkill(skill.name, triggerMessage);
-    setIsOpen(false);
   };
 
   const filtered = search
@@ -79,11 +98,12 @@ export function SkillSelector({ disabled, onActivateSkill }: Props) {
         </svg>
       </button>
 
+      {/* Skill list dropdown */}
       {isOpen && (
         <div className="absolute bottom-full left-0 mb-2 w-[340px] max-h-[400px] bg-[#24272E] border border-[#444] rounded-lg shadow-xl z-50 flex flex-col overflow-hidden">
           <div className="px-3 py-2 border-b border-[#333] flex items-center justify-between">
             <span className="text-sm font-medium text-white">选择 Skill</span>
-            <button onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white text-sm">&times;</button>
+            <button type="button" onClick={() => setIsOpen(false)} className="text-gray-400 hover:text-white text-sm">&times;</button>
           </div>
           <div className="px-3 py-2 border-b border-[#333]">
             <input
@@ -105,6 +125,7 @@ export function SkillSelector({ disabled, onActivateSkill }: Props) {
             ) : (
               filtered.map((skill) => (
                 <button
+                  type="button"
                   key={skill.id}
                   onClick={() => handleSelect(skill)}
                   className="w-full text-left px-3 py-2.5 hover:bg-[#2a2d35] transition border-b border-[#1a1d24] last:border-b-0"

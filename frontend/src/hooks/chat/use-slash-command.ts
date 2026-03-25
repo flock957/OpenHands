@@ -77,7 +77,6 @@ export const useSlashCommand = (
   filteredItemsRef.current = filteredItems;
   const selectedIndexRef = useRef(selectedIndex);
   selectedIndexRef.current = selectedIndex;
-
   // Reset selected index when the filter text changes
   useEffect(() => {
     setSelectedIndex(0);

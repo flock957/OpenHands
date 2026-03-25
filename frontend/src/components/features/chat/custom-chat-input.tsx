@@ -119,7 +119,9 @@ export function CustomChatInput({
     selectItem: selectSlashItem,
     handleSlashKeyDown,
     closeMenu: closeSlashMenu,
-  } = useSlashCommand(chatInputRef as React.RefObject<HTMLDivElement | null>);
+  } = useSlashCommand(
+    chatInputRef as React.RefObject<HTMLDivElement | null>,
+  );
 
   // Cleanup: reset suggestions visibility when component unmounts
   useEffect(

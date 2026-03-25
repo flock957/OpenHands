@@ -67,6 +67,7 @@ export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
     setActiveSkillName(null);
   }, []);
   // >>> END CUSTOM <<<
+
   const { curAgentState } = useAgentState();
   const { data: conversation } = useActiveConversation();
 
