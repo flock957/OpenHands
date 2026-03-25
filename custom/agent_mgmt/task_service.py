@@ -3,7 +3,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
-from uuid import uuid4
+from uuid import UUID, uuid4
+
+
+def _to_uuid(val: str) -> UUID:
+    try:
+        return UUID(val)
+    except ValueError:
+        return UUID(val.replace('-', ''))
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -33,7 +40,7 @@ class TaskService:
         if status:
             stmt = stmt.where(StoredTask.status == status)
         if agent_id:
-            stmt = stmt.where(StoredTask.agent_id == agent_id)
+            stmt = stmt.where(StoredTask.agent_id == _to_uuid(agent_id))
         if search:
             stmt = stmt.where(StoredTask.name.ilike(f'%{search}%'))
 
@@ -71,14 +78,14 @@ class TaskService:
         if status:
             stmt = stmt.where(StoredTask.status == status)
         if agent_id:
-            stmt = stmt.where(StoredTask.agent_id == agent_id)
+            stmt = stmt.where(StoredTask.agent_id == _to_uuid(agent_id))
         result = await self.db.execute(stmt)
         return result.scalar() or 0
 
     async def get_task(self, task_id: str) -> TaskInfo | None:
         stmt = select(StoredTask, StoredAgent.name.label('agent_name')).outerjoin(
             StoredAgent, StoredTask.agent_id == StoredAgent.id
-        ).where(StoredTask.id == task_id)
+        ).where(StoredTask.id == _to_uuid(task_id))
         result = await self.db.execute(stmt)
         row = result.one_or_none()
         if not row:
@@ -112,14 +119,14 @@ class TaskService:
 
         # Get agent name for default task name
         if not name:
-            stmt = select(StoredAgent.name).where(StoredAgent.id == agent_id)
+            stmt = select(StoredAgent.name).where(StoredAgent.id == _to_uuid(agent_id))
             result = await self.db.execute(stmt)
             agent_name = result.scalar_one_or_none()
             name = f'{agent_name} - {now.strftime("%m/%d %H:%M")}' if agent_name else f'Task {now.strftime("%m/%d %H:%M")}'
 
         task = StoredTask(
             id=task_id,
-            agent_id=agent_id,
+            agent_id=_to_uuid(agent_id),
             conversation_id=conversation_id,
             name=name,
             status=TaskStatus.PENDING.value,
@@ -133,7 +140,7 @@ class TaskService:
 
     async def update_task(self, task_id: str, **kwargs) -> bool:
         kwargs['updated_at'] = datetime.now(timezone.utc)
-        stmt = update(StoredTask).where(StoredTask.id == task_id).values(**kwargs)
+        stmt = update(StoredTask).where(StoredTask.id == _to_uuid(task_id)).values(**kwargs)
         result = await self.db.execute(stmt)
         await self.db.commit()
         return result.rowcount > 0

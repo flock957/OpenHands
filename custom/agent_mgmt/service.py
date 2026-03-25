@@ -4,7 +4,15 @@ from __future__ import annotations
 
 import json
 from datetime import datetime, timezone
-from uuid import uuid4
+from uuid import UUID, uuid4
+
+
+def _to_uuid(val: str) -> UUID:
+    """Convert a string (with or without hyphens) to a UUID object."""
+    try:
+        return UUID(val)
+    except ValueError:
+        return UUID(val.replace('-', ''))
 
 from sqlalchemy import delete, func, select, update
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -76,7 +84,7 @@ class AgentService:
         return result.scalar() or 0
 
     async def get_agent(self, agent_id: str, user_id: str | None = None) -> AgentDetail | None:
-        stmt = select(StoredAgent).where(StoredAgent.id == agent_id)
+        stmt = select(StoredAgent).where(StoredAgent.id == _to_uuid(agent_id))
         result = await self.db.execute(stmt)
         agent = result.scalar_one_or_none()
         if not agent:
@@ -86,7 +94,7 @@ class AgentService:
         skill_stmt = (
             select(AgentSkillLink.skill_id, StoredSkill.name, StoredSkill.description)
             .outerjoin(StoredSkill, AgentSkillLink.skill_id == StoredSkill.id)
-            .where(AgentSkillLink.agent_id == agent_id)
+            .where(AgentSkillLink.agent_id == _to_uuid(agent_id))
             .order_by(AgentSkillLink.sort_order)
         )
         skill_result = await self.db.execute(skill_stmt)
@@ -98,7 +106,7 @@ class AgentService:
         is_favorited = False
         if user_id:
             fav_stmt = select(AgentFavorite.id).where(
-                AgentFavorite.agent_id == agent_id,
+                AgentFavorite.agent_id == _to_uuid(agent_id),
                 AgentFavorite.user_id == user_id,
             )
             fav_result = await self.db.execute(fav_stmt)
@@ -145,14 +153,14 @@ class AgentService:
 
         # Link skills
         for i, skill_id in enumerate(data.skill_ids):
-            link = AgentSkillLink(id=uuid4(), agent_id=agent_id, skill_id=skill_id, sort_order=i)
+            link = AgentSkillLink(id=uuid4(), agent_id=agent_id, skill_id=_to_uuid(skill_id), sort_order=i)
             self.db.add(link)
 
         await self.db.commit()
         return str(agent_id)
 
     async def update_agent(self, agent_id: str, data: AgentUpdate) -> bool:
-        values = {}
+        values: dict[str, object] = {}
         if data.name is not None:
             values['name'] = data.name
         if data.description is not None:
@@ -174,28 +182,28 @@ class AgentService:
             return True
 
         values['updated_at'] = datetime.now(timezone.utc)
-        stmt = update(StoredAgent).where(StoredAgent.id == agent_id).values(**values)
+        stmt = update(StoredAgent).where(StoredAgent.id == _to_uuid(agent_id)).values(**values)
         result = await self.db.execute(stmt)
         await self.db.commit()
         return result.rowcount > 0
 
     async def delete_agent(self, agent_id: str) -> bool:
-        stmt = delete(StoredAgent).where(StoredAgent.id == agent_id)
+        stmt = delete(StoredAgent).where(StoredAgent.id == _to_uuid(agent_id))
         result = await self.db.execute(stmt)
         await self.db.commit()
         return result.rowcount > 0
 
     async def set_agent_skills(self, agent_id: str, skill_ids: list[str]) -> None:
-        await self.db.execute(delete(AgentSkillLink).where(AgentSkillLink.agent_id == agent_id))
+        await self.db.execute(delete(AgentSkillLink).where(AgentSkillLink.agent_id == _to_uuid(agent_id)))
         for i, skill_id in enumerate(skill_ids):
-            link = AgentSkillLink(id=uuid4(), agent_id=agent_id, skill_id=skill_id, sort_order=i)
+            link = AgentSkillLink(id=uuid4(), agent_id=_to_uuid(agent_id), skill_id=_to_uuid(skill_id), sort_order=i)
             self.db.add(link)
         await self.db.commit()
 
     async def toggle_favorite(self, agent_id: str, user_id: str) -> bool:
         """Toggle favorite. Returns True if favorited, False if unfavorited."""
         stmt = select(AgentFavorite).where(
-            AgentFavorite.agent_id == agent_id,
+            AgentFavorite.agent_id == _to_uuid(agent_id),
             AgentFavorite.user_id == user_id,
         )
         result = await self.db.execute(stmt)
@@ -206,7 +214,7 @@ class AgentService:
             await self.db.commit()
             return False
         else:
-            fav = AgentFavorite(id=uuid4(), agent_id=agent_id, user_id=user_id)
+            fav = AgentFavorite(id=uuid4(), agent_id=_to_uuid(agent_id), user_id=user_id)
             self.db.add(fav)
             await self.db.commit()
             return True
@@ -222,7 +230,7 @@ class AgentService:
         return [self._to_info(r) for r in result.scalars().all()]
 
     async def increment_usage(self, agent_id: str) -> None:
-        stmt = update(StoredAgent).where(StoredAgent.id == agent_id).values(
+        stmt = update(StoredAgent).where(StoredAgent.id == _to_uuid(agent_id)).values(
             usage_count=StoredAgent.usage_count + 1,
             updated_at=datetime.now(timezone.utc),
         )
@@ -247,6 +255,7 @@ class AgentService:
             description=agent.description,
             category=agent.category,
             tags=tags,
+            config_json=agent.config_json,
             is_enabled=agent.is_enabled,
             usage_count=agent.usage_count,
             created_by=agent.created_by,

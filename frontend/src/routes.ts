@@ -31,6 +31,7 @@ export default [
     route("agents/:agentId", "routes/agent-detail.tsx"),
     route("tasks", "routes/task-center.tsx"),
     route("tasks/:taskId", "routes/task-detail.tsx"),
+    route("my-agents", "routes/my-agents.tsx"),
     // >>> END CUSTOM <<<
     route("oauth/device/verify", "routes/device-verify.tsx"),
   ]),

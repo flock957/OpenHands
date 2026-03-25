@@ -45,6 +45,14 @@ async def _ensure_tables():
             )
         _tables_created = True
 
+        # Seed built-in agents on first startup
+        session = _session_factory()
+        try:
+            from custom.agent_mgmt.seed import seed_perf_agent
+            await seed_perf_agent(session)
+        finally:
+            await session.close()
+
 
 async def get_agent_db() -> AsyncSession:
     await _ensure_tables()

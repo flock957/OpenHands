@@ -5,6 +5,8 @@ from __future__ import annotations
 from fastapi import APIRouter, HTTPException, Query
 
 from custom.agent_mgmt.db import get_agent_db
+from pydantic import BaseModel
+
 from custom.agent_mgmt.models import TaskCreate, TaskUpdate
 from custom.agent_mgmt.service import AgentService
 from custom.agent_mgmt.task_service import TaskService
@@ -103,6 +105,24 @@ async def update_task(task_id: str, data: TaskUpdate):
         if not ok:
             raise HTTPException(status_code=404, detail='Task not found')
         return {'status': 'updated'}
+    finally:
+        await db.close()
+
+
+class TaskStartRequest(BaseModel):
+    conversation_id: str
+
+
+@router.post('/{task_id}/start')
+async def start_task(task_id: str, data: TaskStartRequest):
+    """Link a task to a conversation and set status to running."""
+    db = await get_agent_db()
+    try:
+        svc = TaskService(db)
+        ok = await svc.start_task(task_id, data.conversation_id)
+        if not ok:
+            raise HTTPException(status_code=404, detail='Task not found')
+        return {'status': 'started'}
     finally:
         await db.close()
 

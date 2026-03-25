@@ -6,6 +6,7 @@ export interface AgentInfo {
   description: string | null;
   category: string | null;
   tags: string[];
+  config_json: string | null;
   is_enabled: boolean;
   usage_count: number;
   created_by: string | null;
