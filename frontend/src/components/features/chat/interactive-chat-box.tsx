@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router";
 import { isFileImage } from "#/utils/is-file-image";
 import { displayErrorToast } from "#/utils/custom-toast-handlers";
 import { validateFiles } from "#/utils/file-validation";
@@ -12,7 +13,9 @@ import { processFiles, processImages } from "#/utils/file-processing";
 import { useSubConversationTaskPolling } from "#/hooks/query/use-sub-conversation-task-polling";
 import { isTaskPolling } from "#/utils/utils";
 // >>> CUSTOM: HiClaw <<<
-import { SkillActiveBadge } from "#/components/features/custom/skill-management/skill-active-badge";
+import type { AgentInfo } from "#/api/custom-skill-service/agent-service.api";
+import { TaskService } from "#/api/custom-skill-service/task-service.api";
+import { useCreateConversation } from "#/hooks/mutation/use-create-conversation";
 import { PerfAnalysisInlinePanel } from "#/components/features/custom/skill-management/perf-analysis-inline-panel";
 // >>> END CUSTOM <<<
 
@@ -21,6 +24,7 @@ interface InteractiveChatBoxProps {
 }
 
 export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
+  const navigate = useNavigate();
   const {
     images,
     files,
@@ -32,41 +36,76 @@ export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
     addImageLoading,
     removeImageLoading,
     subConversationTaskId,
-    setShouldHideSuggestions,
   } = useConversationStore();
 
-  // >>> CUSTOM: HiClaw — Skill activation state <<<
-  const [activeSkillName, setActiveSkillName] = React.useState<string | null>(null);
+  // >>> CUSTOM: HiClaw — Agent selection <<<
+  const [activeAgentName, setActiveAgentName] = React.useState<string | null>(
+    null,
+  );
+  const [agentStarting, setAgentStarting] = React.useState(false);
   const [showPerfPanel, setShowPerfPanel] = React.useState(false);
+  const [perfAgentId, setPerfAgentId] = React.useState<string | null>(null);
+  const { mutateAsync: createConversation } = useCreateConversation();
 
-  const PERF_SKILL_NAMES = ["perf-analysis-workflow", "performance-analysis", "perf-analyze"];
+  const handleSelectAgent = React.useCallback(
+    async (agent: AgentInfo) => {
+      // Check agent type from config_json
+      let agentType: string | null = null;
+      try {
+        agentType = JSON.parse(agent.config_json || "{}").agent_type;
+      } catch {
+        /* ignore */
+      }
 
-  const handleActivateSkill = React.useCallback((skillName: string, content: string) => {
-    if (PERF_SKILL_NAMES.some(n => skillName.toLowerCase().includes(n.toLowerCase()))) {
-      setActiveSkillName(skillName);
-      setShowPerfPanel(true);
-      setShouldHideSuggestions(true);
-      return;
-    }
-    setActiveSkillName(skillName);
-    onSubmit(content, [], []);
-  }, [onSubmit, setShouldHideSuggestions]);
+      // Perf-analysis agent: show inline panel in chat box
+      if (agentType === "perf-analysis") {
+        setPerfAgentId(agent.id);
+        setShowPerfPanel(true);
+        return;
+      }
 
-  const handlePerfSubmit = React.useCallback((_tracePath: string, message: string) => {
-    setShowPerfPanel(false);
-    onSubmit(message, [], []);
-  }, [onSubmit]);
+      // Generic agent: create task + conversation + navigate
+      setActiveAgentName(agent.name);
+      setAgentStarting(true);
+      try {
+        const taskResult = await TaskService.createTask({ agent_id: agent.id });
+        const prompt = taskResult.agent.system_prompt
+          ? `[Agent: ${taskResult.agent.name}]\n\n${taskResult.agent.system_prompt}`
+          : `Execute Agent: ${taskResult.agent.name}`;
 
-  const handlePerfDismiss = React.useCallback(() => {
-    setShowPerfPanel(false);
-    setActiveSkillName(null);
-    setShouldHideSuggestions(false);
-  }, [setShouldHideSuggestions]);
+        const convData = await createConversation({ query: prompt });
+        await TaskService.startTask(
+          taskResult.task_id,
+          convData.conversation_id,
+        ).catch(() => {});
+        navigate(`/conversations/${convData.conversation_id}`);
+      } catch (e) {
+        console.error("Failed to start agent:", e);
+        displayErrorToast("Failed to start agent");
+      } finally {
+        setAgentStarting(false);
+        setActiveAgentName(null);
+      }
+    },
+    [navigate, createConversation],
+  );
 
-  const handleDismissSkill = React.useCallback(() => {
-    setActiveSkillName(null);
-  }, []);
+  // Perf panel: submit analysis in current conversation
+  const handlePerfPanelSubmit = React.useCallback(
+    (_tracePath: string, message: string) => {
+      // Track HiClaw task in background (non-blocking)
+      if (perfAgentId) {
+        TaskService.createTask({ agent_id: perfAgentId }).catch(() => {});
+      }
+      // Submit message to current conversation
+      onSubmit(message, [], []);
+      setShowPerfPanel(false);
+      setPerfAgentId(null);
+    },
+    [perfAgentId, onSubmit],
+  );
   // >>> END CUSTOM <<<
+
   const { curAgentState } = useAgentState();
   const { data: conversation } = useActiveConversation();
 
@@ -185,22 +224,30 @@ export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
   // queued server-side and delivered when the conversation becomes ready
   const isDisabled =
     curAgentState === AgentState.AWAITING_USER_CONFIRMATION ||
-    isTaskPolling(subConversationTaskStatus);
+    isTaskPolling(subConversationTaskStatus) ||
+    agentStarting;
 
   return (
     <div data-testid="interactive-chat-box">
-      {/* >>> CUSTOM: HiClaw — Skill active badge <<< */}
-      {activeSkillName && (
-        <div className="mb-2">
-          <SkillActiveBadge skillName={activeSkillName} onDismiss={handleDismissSkill} />
-        </div>
-      )}
+      {/* >>> CUSTOM: HiClaw — Perf analysis inline panel <<< */}
       {showPerfPanel && (
         <PerfAnalysisInlinePanel
-          onSubmit={handlePerfSubmit}
-          onDismiss={handlePerfDismiss}
-          disabled={isDisabled}
+          onSubmit={handlePerfPanelSubmit}
+          onDismiss={() => {
+            setShowPerfPanel(false);
+            setPerfAgentId(null);
+          }}
+          disabled={agentStarting}
         />
+      )}
+      {/* >>> END CUSTOM <<< */}
+      {/* >>> CUSTOM: HiClaw — Agent starting indicator <<< */}
+      {activeAgentName && (
+        <div className="mb-2 px-3 py-1.5 bg-[#4ECDC4]/10 border border-[#4ECDC4]/30 rounded-lg">
+          <span className="text-xs text-[#4ECDC4]">
+            {`${activeAgentName} 启动中...`}
+          </span>
+        </div>
       )}
       {/* >>> END CUSTOM <<< */}
       <CustomChatInput
@@ -209,7 +256,7 @@ export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
         onFilesPaste={handleUpload}
         conversationStatus={conversation?.status || null}
         // >>> CUSTOM: HiClaw <<<
-        onActivateSkill={handleActivateSkill}
+        onSelectAgent={handleSelectAgent}
         // >>> END CUSTOM <<<
       />
       <div className="mt-4">

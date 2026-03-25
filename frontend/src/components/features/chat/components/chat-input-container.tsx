@@ -7,6 +7,9 @@ import { SlashCommandMenu } from "./slash-command-menu";
 import { useConversationStore } from "#/stores/conversation-store";
 import { cn } from "#/utils/utils";
 import { SlashCommandItem } from "#/hooks/chat/use-slash-command";
+// >>> CUSTOM: HiClaw <<<
+import type { AgentInfo } from "#/api/custom-skill-service/agent-service.api";
+// >>> END CUSTOM <<<
 
 interface ChatInputContainerProps {
   chatContainerRef: React.RefObject<HTMLDivElement | null>;
@@ -31,7 +34,7 @@ interface ChatInputContainerProps {
   slashSelectedIndex?: number;
   onSlashSelect?: (item: SlashCommandItem) => void;
   // >>> CUSTOM: HiClaw <<<
-  onActivateSkill?: (skillName: string, content: string) => void;
+  onSelectAgent?: (agent: AgentInfo) => void;
   // >>> END CUSTOM <<<
 }
 
@@ -57,7 +60,7 @@ export function ChatInputContainer({
   slashItems = [],
   slashSelectedIndex = 0,
   onSlashSelect,
-  onActivateSkill,
+  onSelectAgent,
 }: ChatInputContainerProps) {
   const conversationMode = useConversationStore(
     (state) => state.conversationMode,
@@ -102,7 +105,7 @@ export function ChatInputContainer({
           onKeyDown={onKeyDown}
           onFocus={onFocus}
           onBlur={onBlur}
-          onActivateSkill={onActivateSkill}
+          onSelectAgent={onSelectAgent}
         />
       </div>
 

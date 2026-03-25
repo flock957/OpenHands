@@ -63,6 +63,15 @@ export class TaskService {
     await openHands.patch(`/api/v1/tasks/${taskId}`, data);
   }
 
+  static async startTask(
+    taskId: string,
+    conversationId: string,
+  ): Promise<void> {
+    await openHands.post(`/api/v1/tasks/${taskId}/start`, {
+      conversation_id: conversationId,
+    });
+  }
+
   static async cancelTask(taskId: string): Promise<void> {
     await openHands.post(`/api/v1/tasks/${taskId}/cancel`);
   }

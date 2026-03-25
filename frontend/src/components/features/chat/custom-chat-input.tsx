@@ -22,7 +22,9 @@ export interface CustomChatInputProps {
   className?: React.HTMLAttributes<HTMLDivElement>["className"];
   buttonClassName?: React.HTMLAttributes<HTMLButtonElement>["className"];
   // >>> CUSTOM: HiClaw <<<
-  onActivateSkill?: (skillName: string, content: string) => void;
+  onSelectAgent?: (
+    agent: import("#/api/custom-skill-service/agent-service.api").AgentInfo,
+  ) => void;
   // >>> END CUSTOM <<<
 }
 
@@ -36,7 +38,7 @@ export function CustomChatInput({
   onFilesPaste,
   className = "",
   buttonClassName = "",
-  onActivateSkill,
+  onSelectAgent,
 }: CustomChatInputProps) {
   const {
     submittedMessage,
@@ -180,7 +182,7 @@ export function CustomChatInput({
           slashSelectedIndex={slashSelectedIndex}
           onSlashSelect={selectSlashItem}
           // >>> CUSTOM: HiClaw <<<
-          onActivateSkill={onActivateSkill}
+          onSelectAgent={onSelectAgent}
           // >>> END CUSTOM <<<
         />
       </div>

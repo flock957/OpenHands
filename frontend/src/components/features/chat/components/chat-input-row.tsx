@@ -4,7 +4,8 @@ import { ChatAddFileButton } from "../chat-add-file-button";
 import { ChatSendButton } from "../chat-send-button";
 import { ChatInputField } from "./chat-input-field";
 // >>> CUSTOM: HiClaw <<<
-import { SkillSelector } from "#/components/features/custom/skill-management/skill-selector";
+import type { AgentInfo } from "#/api/custom-skill-service/agent-service.api";
+import { AgentSelector } from "#/components/features/custom/agent-center/agent-selector";
 // >>> END CUSTOM <<<
 
 interface ChatInputRowProps {
@@ -20,7 +21,7 @@ interface ChatInputRowProps {
   onFocus?: () => void;
   onBlur?: () => void;
   // >>> CUSTOM: HiClaw <<<
-  onActivateSkill?: (skillName: string, content: string) => void;
+  onSelectAgent?: (agent: AgentInfo) => void;
   // >>> END CUSTOM <<<
 }
 
@@ -36,7 +37,7 @@ export function ChatInputRow({
   onKeyDown,
   onFocus,
   onBlur,
-  onActivateSkill,
+  onSelectAgent,
 }: ChatInputRowProps) {
   return (
     <div className="box-border content-stretch flex flex-row items-end justify-between p-0 relative shrink-0 w-full pb-[18px] gap-2">
@@ -47,8 +48,8 @@ export function ChatInputRow({
         />
 
         {/* >>> CUSTOM: HiClaw <<< */}
-        {onActivateSkill && (
-          <SkillSelector disabled={disabled} onActivateSkill={onActivateSkill} />
+        {onSelectAgent && (
+          <AgentSelector disabled={disabled} onSelectAgent={onSelectAgent} />
         )}
         {/* >>> END CUSTOM <<< */}
 

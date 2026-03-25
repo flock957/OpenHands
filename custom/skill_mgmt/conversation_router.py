@@ -65,13 +65,14 @@ async def switch_model(conversation_id: str, req: ModelSwitchRequest):
         # Fallback: use the first running container
         if not old_sandbox_id:
             running = client.containers.list()
-            agent_containers = [c for c in running if c.name.startswith('oh-agent-server-')]
+            agent_containers = [c for c in running if (c.name or '').startswith('oh-agent-server-')]
             if agent_containers:
-                old_sandbox_id = agent_containers[0].name
+                old_sandbox_id = str(agent_containers[0].name)
                 _logger.info(f'Fallback: using running container {old_sandbox_id}')
             else:
                 raise HTTPException(status_code=404, detail='没有找到运行中的容器')
 
+        assert old_sandbox_id is not None
         _logger.info(f'Switching model for sandbox {old_sandbox_id}')
 
         # --- Get old container ---
@@ -117,12 +118,12 @@ async def switch_model(conversation_id: str, req: ModelSwitchRequest):
 
         # --- Start new container from snapshot (same name = same sandbox_id) ---
         _logger.info(f'Starting new container {old_sandbox_id}')
-        client.containers.run(
+        client.containers.run(  # type: ignore[call-overload]
             image=snapshot_tag,
             command=old_cmd,
             name=old_sandbox_id,
             environment=new_env,
-            working_dir=old_workdir,
+            working_dir=str(old_workdir),
             labels=old_labels,
             network_mode=net_mode if net_mode == 'host' else None,
             ports=port_bindings if net_mode != 'host' else None,

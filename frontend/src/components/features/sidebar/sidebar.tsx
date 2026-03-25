@@ -9,6 +9,7 @@ import { ConversationPanelButton } from "#/components/shared/buttons/conversatio
 // >>> CUSTOM: HiClaw <<<
 import { SkillManagementButton } from "#/components/shared/buttons/skill-management-button";
 import { AgentCenterButton } from "#/components/shared/buttons/agent-center-button";
+import { MyAgentsButton } from "#/components/shared/buttons/my-agents-button";
 import { TaskCenterButton } from "#/components/shared/buttons/task-center-button";
 // >>> END CUSTOM <<<
 import { SettingsModal } from "#/components/shared/modals/settings/settings-modal";
@@ -95,6 +96,7 @@ export function Sidebar() {
             {/* >>> CUSTOM: HiClaw <<< */}
             <SkillManagementButton />
             <AgentCenterButton />
+            <MyAgentsButton />
             <TaskCenterButton />
             {/* >>> END CUSTOM <<< */}
           </div>
@@ -102,7 +104,10 @@ export function Sidebar() {
           <div className="flex flex-row md:flex-col md:items-center gap-[26px]">
             {/* >>> CUSTOM: HiClaw - User ID display <<< */}
             {user.data?.login && (
-              <div className="hidden md:flex items-center justify-center w-full px-1" title={user.data.login}>
+              <div
+                className="hidden md:flex items-center justify-center w-full px-1"
+                title={user.data.login}
+              >
                 <span className="text-[10px] text-gray-500 truncate max-w-[70px] text-center">
                   {user.data.login}
                 </span>

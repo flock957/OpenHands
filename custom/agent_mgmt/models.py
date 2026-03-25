@@ -111,6 +111,7 @@ class AgentInfo(BaseModel):
     description: str | None
     category: str | None
     tags: list[str]
+    config_json: str | None = None
     is_enabled: bool
     usage_count: int
     created_by: str | None
