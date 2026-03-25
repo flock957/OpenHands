@@ -116,7 +116,7 @@ def _get_feature_flags() -> WebClientFeatureFlags:
 
 
 class DefaultWebClientConfigInjector(WebClientConfigInjector):
-    posthog_client_key: str = Field(default_factory=_get_posthog_client_key)
+    posthog_client_key: str | None = Field(default_factory=_get_posthog_client_key)
     feature_flags: WebClientFeatureFlags = Field(default_factory=_get_feature_flags)
     providers_configured: list[ProviderType] = Field(
         default_factory=_get_providers_configured

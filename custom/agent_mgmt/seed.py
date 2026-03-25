@@ -10,9 +10,51 @@ from uuid import uuid4
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from custom.agent_mgmt.models import StoredAgent
+from sqlalchemy import text as sql_text
+
+from custom.agent_mgmt.models import AgentSkillLink, StoredAgent
 
 _logger = logging.getLogger(__name__)
+
+
+async def _link_skills_by_name(
+    db: AsyncSession, agent_id: object, skill_names: list[str]
+) -> None:
+    """Link skills from managed_skill table to an agent by skill name.
+
+    Uses raw SQL to avoid UUID type mismatches between tables.
+    """
+    # Normalize agent_id to hex string (no hyphens)
+    aid = str(agent_id).replace('-', '')
+    for i, name in enumerate(skill_names):
+        result = await db.execute(
+            sql_text("SELECT id FROM managed_skill WHERE name = :name"),
+            {'name': name},
+        )
+        row = result.fetchone()
+        if not row:
+            _logger.debug(f'Skill not found for linking: {name}')
+            continue
+        sid = str(row[0]).replace('-', '')
+        # Check if link already exists
+        existing = await db.execute(
+            sql_text(
+                "SELECT id FROM agent_skill WHERE agent_id = :aid AND skill_id = :sid"
+            ),
+            {'aid': aid, 'sid': sid},
+        )
+        if existing.fetchone():
+            continue
+        link_id = uuid4().hex
+        await db.execute(
+            sql_text(
+                "INSERT INTO agent_skill (id, agent_id, skill_id, sort_order) "
+                "VALUES (:id, :aid, :sid, :sort)"
+            ),
+            {'id': link_id, 'aid': aid, 'sid': sid, 'sort': i},
+        )
+        _logger.info(f'Linked skill {name} to agent {aid[:12]}...')
+    await db.commit()
 
 PERF_AGENT_NAME = '性能分析 Agent'
 
@@ -48,6 +90,35 @@ PERF_AGENT_USAGE = """\
 """
 
 
+KERNEL_DIFF_AGENT_NAME = '内核对比分析 Agent'
+
+KERNEL_DIFF_AGENT_DESCRIPTION = (
+    'Android Common Kernel 月度版本对比分析。'
+    '输入两个月度标签，自动克隆内核仓库、提取提交、分析 KO 模块影响，生成 Markdown 报告。'
+)
+
+KERNEL_DIFF_AGENT_USAGE = """\
+## 使用方式
+
+1. 在 Agent 详情页点击「开始分析」
+2. 输入旧版本标签（如 `android-6.12-2025-08`）
+3. 输入新版本标签（如 `android-6.12-2025-12`）
+4. 点击「Analyze」开始分析
+
+## 分析流程
+
+1. 克隆/更新 Android Common Kernel 仓库
+2. 提取两个标签之间的所有提交
+3. 分析每个提交对 KO 模块的影响（Kconfig/Makefile/EXPORT_SYMBOL 等）
+4. 按子系统分组，标记风险等级（高/中/低/无）
+5. 生成 Markdown 分析报告
+
+## 输出
+
+- `kernel_analysis_report.md` — 完整对比分析报告
+"""
+
+
 def _load_workflow_content() -> str:
     """Load perf-analysis-workflow.md as system_prompt."""
     workflow_path = (
@@ -59,6 +130,19 @@ def _load_workflow_content() -> str:
     if workflow_path.exists():
         return workflow_path.read_text(encoding='utf-8')
     _logger.warning(f'Workflow skill not found: {workflow_path}')
+    return ''
+
+
+def _load_kernel_diff_content() -> str:
+    """Load android-kernel-diff-analysis.md as system_prompt."""
+    skill_path = (
+        Path(__file__).parent.parent
+        / 'skill_examples'
+        / 'android-kernel-diff-analysis.md'
+    )
+    if skill_path.exists():
+        return skill_path.read_text(encoding='utf-8')
+    _logger.warning(f'Kernel diff skill not found: {skill_path}')
     return ''
 
 
@@ -104,4 +188,54 @@ async def seed_perf_agent(db: AsyncSession) -> None:
 
     except Exception as e:
         _logger.warning(f'Failed to seed perf agent: {e}', exc_info=True)
+        await db.rollback()
+
+
+async def seed_kernel_diff_agent(db: AsyncSession) -> None:
+    """Create the built-in Kernel Diff Analysis Agent if it doesn't exist."""
+    try:
+        result = await db.execute(
+            select(StoredAgent).where(StoredAgent.name == KERNEL_DIFF_AGENT_NAME)
+        )
+        existing = result.scalars().first()
+        if existing is not None:
+            changed = False
+            if not existing.config_json:
+                existing.config_json = json.dumps({'agent_type': 'kernel-diff'})
+                changed = True
+            if not existing.usage_instructions:
+                existing.usage_instructions = KERNEL_DIFF_AGENT_USAGE
+                changed = True
+            if not existing.system_prompt:
+                existing.system_prompt = _load_kernel_diff_content()
+                changed = True
+            if changed:
+                await db.commit()
+                _logger.info(f'Updated existing agent: {KERNEL_DIFF_AGENT_NAME}')
+            # Ensure skill is linked
+            await _link_skills_by_name(db, existing.id, ['android-kernel-diff-analysis'])
+            return
+
+        agent_id = uuid4()
+        agent = StoredAgent(
+            id=agent_id,
+            name=KERNEL_DIFF_AGENT_NAME,
+            description=KERNEL_DIFF_AGENT_DESCRIPTION,
+            system_prompt=_load_kernel_diff_content(),
+            category='kernel-analysis',
+            tags=json.dumps(['android', 'kernel', 'ko', 'driver', '内核对比']),
+            config_json=json.dumps({'agent_type': 'kernel-diff'}),
+            usage_instructions=KERNEL_DIFF_AGENT_USAGE,
+            is_enabled=True,
+            created_by='system',
+        )
+        db.add(agent)
+        await db.commit()
+        _logger.info(f'Seeded built-in agent: {KERNEL_DIFF_AGENT_NAME}')
+
+        # Link gyz's kernel-diff skill
+        await _link_skills_by_name(db, agent_id, ['android-kernel-diff-analysis'])
+
+    except Exception as e:
+        _logger.warning(f'Failed to seed kernel diff agent: {e}', exc_info=True)
         await db.rollback()
