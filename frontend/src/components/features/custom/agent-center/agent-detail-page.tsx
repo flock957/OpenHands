@@ -7,14 +7,17 @@ import {
 } from "#/api/custom-skill-service/agent-service.api";
 import { TaskService } from "#/api/custom-skill-service/task-service.api";
 import { useCreateConversation } from "#/hooks/mutation/use-create-conversation";
+import { cn } from "#/utils/utils";
 import { PerfAnalysisInlinePanel } from "../skill-management/perf-analysis-inline-panel";
+// KernelDiffInlinePanel only available on merge branch
+// import { KernelDiffInlinePanel } from "../skill-management/kernel-diff-inline-panel";
 
-function isPerfAgent(agent: AgentDetail | null): boolean {
-  if (!agent?.config_json) return false;
+function getAgentType(agent: AgentDetail | null): string | null {
+  if (!agent?.config_json) return null;
   try {
-    return JSON.parse(agent.config_json).agent_type === "perf-analysis";
+    return JSON.parse(agent.config_json).agent_type || null;
   } catch {
-    return false;
+    return null;
   }
 }
 
@@ -37,7 +40,8 @@ export function AgentDetailPage() {
       .finally(() => setLoading(false));
   }, [agentId]);
 
-  const isPerf = isPerfAgent(agent);
+  const agentType = getAgentType(agent);
+  const hasPanel = agentType === "perf-analysis" || agentType === "kernel-diff";
 
   // Helper: create HiClaw task + conversation, then navigate
   const startAgentConversation = React.useCallback(
@@ -146,12 +150,17 @@ export function AgentDetailPage() {
         </div>
 
         {/* Action button */}
-        {isPerf ? (
+        {hasPanel ? (
           <button
             type="button"
             onClick={() => setShowPerfPanel((v) => !v)}
             disabled={starting || !agent.is_enabled}
-            className="px-6 py-2.5 bg-[#4ECDC4] hover:bg-[#3dbdb5] disabled:opacity-50 rounded-lg text-sm font-medium text-black transition shrink-0"
+            className={cn(
+              "px-6 py-2.5 disabled:opacity-50 rounded-lg text-sm font-medium text-black transition shrink-0",
+              agentType === "kernel-diff"
+                ? "bg-[#F97316] hover:bg-[#EA690E]"
+                : "bg-[#4ECDC4] hover:bg-[#3dbdb5]",
+            )}
           >
             {starting ? "分析中..." : showPerfPanel ? "收起面板" : "开始分析"}
           </button>
@@ -174,21 +183,23 @@ export function AgentDetailPage() {
         </div>
       )}
 
-      {/* Perf analysis panel */}
-      {isPerf && showPerfPanel && (
+      {/* Analysis panel */}
+      {hasPanel && showPerfPanel && (
         <div className="mb-6">
-          <PerfAnalysisInlinePanel
-            onSubmit={handlePerfSubmit}
-            onDismiss={() => setShowPerfPanel(false)}
-            disabled={starting}
-          />
+          {agentType === "perf-analysis" ? (
+            <PerfAnalysisInlinePanel
+              onSubmit={handlePerfSubmit}
+              onDismiss={() => setShowPerfPanel(false)}
+              disabled={starting}
+            />
+          ) : null}
         </div>
       )}
 
       {/* Content grid */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* System Prompt - hide for perf agent (too long) */}
-        {!isPerf && (
+        {/* System Prompt - hide for agents with panels (too long) */}
+        {!hasPanel && (
           <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-4">
             <h3 className="text-sm font-semibold text-gray-300 mb-2">
               系统提示词
@@ -240,44 +251,99 @@ export function AgentDetailPage() {
           </div>
         </div>
 
-        {/* Skill List */}
+        {/* Workflow Rule & Skills */}
         <div className="bg-[#161b22] border border-[#30363d] rounded-lg p-4">
+          {/* Workflow Rule */}
+          {agent.skills.filter((s) => s.name.includes("workflow")).length >
+            0 && (
+            <div className="mb-4">
+              <h3 className="text-sm font-semibold text-gray-300 mb-3">
+                工作流 Rule
+              </h3>
+              <div className="space-y-2">
+                {agent.skills
+                  .filter((s) => s.name.includes("workflow"))
+                  .map((skill) => (
+                    <div
+                      key={skill.id}
+                      className="flex items-start gap-3 p-2 rounded bg-[#4ECDC4]/5 border border-[#4ECDC4]/20"
+                    >
+                      <div className="w-8 h-8 rounded bg-[#4ECDC4]/15 flex items-center justify-center shrink-0 mt-0.5">
+                        <svg
+                          width="14"
+                          height="14"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="#4ECDC4"
+                          strokeWidth="2"
+                          strokeLinecap="round"
+                          strokeLinejoin="round"
+                        >
+                          <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                        </svg>
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm text-[#4ECDC4] font-medium truncate">
+                          {skill.name}
+                        </p>
+                        <p className="text-xs text-gray-500 truncate">
+                          {skill.description ||
+                            "始终加载的工作流规则，指导 Agent 按步骤执行分析"}
+                        </p>
+                      </div>
+                      <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#4ECDC4]/15 text-[#4ECDC4] shrink-0">
+                        Rule
+                      </span>
+                    </div>
+                  ))}
+              </div>
+            </div>
+          )}
+
+          {/* Associated Skills */}
           <h3 className="text-sm font-semibold text-gray-300 mb-3">
-            关联 Skills ({agent.skills.length})
+            关联 Skills (
+            {agent.skills.filter((s) => !s.name.includes("workflow")).length})
           </h3>
-          {agent.skills.length === 0 ? (
+          {agent.skills.filter((s) => !s.name.includes("workflow")).length ===
+          0 ? (
             <p className="text-sm text-gray-500">暂未关联任何 Skill</p>
           ) : (
             <div className="space-y-2 max-h-60 overflow-auto custom-scrollbar">
-              {agent.skills.map((skill) => (
-                <div
-                  key={skill.id}
-                  className="flex items-start gap-3 p-2 rounded bg-[#0d1117] hover:bg-[#21262d] transition cursor-pointer"
-                  onClick={() => navigate("/skill-management")}
-                >
-                  <div className="w-8 h-8 rounded bg-blue-900/30 flex items-center justify-center shrink-0 mt-0.5">
-                    <svg
-                      width="14"
-                      height="14"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                      className="text-blue-400"
-                    >
-                      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
-                    </svg>
+              {agent.skills
+                .filter((s) => !s.name.includes("workflow"))
+                .map((skill) => (
+                  <div
+                    key={skill.id}
+                    className="flex items-start gap-3 p-2 rounded bg-[#0d1117] hover:bg-[#21262d] transition cursor-pointer"
+                    onClick={() => navigate("/skill-management")}
+                  >
+                    <div className="w-8 h-8 rounded bg-blue-900/30 flex items-center justify-center shrink-0 mt-0.5">
+                      <svg
+                        width="14"
+                        height="14"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        className="text-blue-400"
+                      >
+                        <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z" />
+                      </svg>
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm text-white font-medium truncate">
+                        {skill.name}
+                      </p>
+                      <p className="text-xs text-gray-500 truncate">
+                        {skill.description || "暂无描述"}
+                      </p>
+                    </div>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-blue-900/30 text-blue-400 shrink-0">
+                      Skill
+                    </span>
                   </div>
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm text-white font-medium truncate">
-                      {skill.name}
-                    </p>
-                    <p className="text-xs text-gray-500 truncate">
-                      {skill.description || "暂无描述"}
-                    </p>
-                  </div>
-                </div>
-              ))}
+                ))}
             </div>
           )}
         </div>
