@@ -36,6 +36,7 @@ export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
     addImageLoading,
     removeImageLoading,
     subConversationTaskId,
+    setShouldHideSuggestions,
   } = useConversationStore();
 
   // >>> CUSTOM: HiClaw — Agent selection <<<
@@ -61,6 +62,7 @@ export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
       if (agentType === "perf-analysis") {
         setPerfAgentId(agent.id);
         setShowPerfPanel(true);
+        setShouldHideSuggestions(true);
         return;
       }
 
@@ -87,7 +89,7 @@ export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
         setActiveAgentName(null);
       }
     },
-    [navigate, createConversation],
+    [navigate, createConversation, setShouldHideSuggestions],
   );
 
   // Perf panel: submit analysis in current conversation
@@ -101,8 +103,9 @@ export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
       onSubmit(message, [], []);
       setShowPerfPanel(false);
       setPerfAgentId(null);
+      setShouldHideSuggestions(false);
     },
-    [perfAgentId, onSubmit],
+    [perfAgentId, onSubmit, setShouldHideSuggestions],
   );
   // >>> END CUSTOM <<<
 
@@ -236,6 +239,7 @@ export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
           onDismiss={() => {
             setShowPerfPanel(false);
             setPerfAgentId(null);
+            setShouldHideSuggestions(false);
           }}
           disabled={agentStarting}
         />
