@@ -18,6 +18,7 @@ import { TaskService } from "#/api/custom-skill-service/task-service.api";
 import { useCreateConversation } from "#/hooks/mutation/use-create-conversation";
 import { PerfAnalysisInlinePanel } from "#/components/features/custom/skill-management/perf-analysis-inline-panel";
 import { PerfReportDownload } from "#/components/features/custom/skill-management/perf-report-download";
+import { useConversationId } from "#/hooks/use-conversation-id";
 // >>> END CUSTOM <<<
 
 interface InteractiveChatBoxProps {
@@ -42,6 +43,8 @@ export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
 
   const { curAgentState } = useAgentState();
   const { data: conversation } = useActiveConversation();
+
+  const { conversationId: currentConvId } = useConversationId();
 
   // >>> CUSTOM: HiClaw — Agent selection <<<
   const [activeAgentName, setActiveAgentName] = React.useState<string | null>(
@@ -107,10 +110,9 @@ export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
         try {
           const taskResult = await TaskService.createTask({ agent_id: perfAgentId });
           setHicTaskId(taskResult.task_id);
-          // Link task to current conversation if available
-          const convId = conversation?.conversation_id;
-          if (convId) {
-            TaskService.startTask(taskResult.task_id, convId).catch(() => {});
+          // Link task to current conversation
+          if (currentConvId && !currentConvId.startsWith("task-")) {
+            TaskService.startTask(taskResult.task_id, currentConvId).catch(() => {});
           }
         } catch { /* non-blocking */ }
       }
@@ -120,7 +122,7 @@ export function InteractiveChatBox({ onSubmit }: InteractiveChatBoxProps) {
       setPerfAgentId(null);
       setShouldHideSuggestions(false);
     },
-    [perfAgentId, onSubmit, setShouldHideSuggestions, conversation],
+    [perfAgentId, onSubmit, setShouldHideSuggestions, currentConvId],
   );
 
   // Auto-update task status when agent finishes
